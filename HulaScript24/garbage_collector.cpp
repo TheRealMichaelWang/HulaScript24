@@ -37,11 +37,15 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 		.table_start = table_offset, //table_start,
 		.length = element_count //length
 	};
+	for (uint_fast32_t i = 0; i < new_entry.length; i++) {
+		table_elems[new_entry.table_start + i] = make_nil();
+	}
 	table_offset += element_count;
 
 	return std::make_optional(new_entry);
 }
 
+//elements are initialized by default to nil
 std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	std::optional<table_entry> res = allocate_table_no_id(element_count);
 	if (!res.has_value())
@@ -56,10 +60,15 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 		available_table_ids.pop();
 	}
 	
-	table_entries.insert({ id, res.value() });
+	table_entry table_entry = res.value();
+	for (uint_fast32_t i = 0; i < table_entry.length; i++) {
+		table_elems[table_entry.table_start + i] = make_nil();
+	}
+	table_entries.insert({ id, table_entry });
 	return id;
 }
 
+//elements are not initialized by default
 bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 	auto it = table_entries.find(table_id);
 	assert(it != table_entries.end());

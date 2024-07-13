@@ -30,7 +30,7 @@ instance::error instance::type_error(value::vtype expected, value::vtype got, ui
 	};
 
 	std::stringstream ss;
-	ss << "Expecte type " << type_names[expected] << " but got " << type_names[got] << " instead.";
+	ss << "Expected type " << type_names[expected] << " but got " << type_names[got] << " instead.";
 
 	last_error = error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
 	return last_error;

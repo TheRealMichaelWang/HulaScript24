@@ -10,7 +10,7 @@ struct loaded_function_entry {
 	uint32_t global_addr;
 };
 
-std::optional<instance::value> instance::execute(std::vector<instruction> new_instructions) {
+std::optional<instance::value> instance::execute(const std::vector<instruction>& new_instructions, const std::vector<value>& constants) {
 	std::vector<instruction> total_instructions(loaded_functions.size() + new_instructions.size());
 
 	total_instructions.insert(total_instructions.begin(), loaded_functions.begin(), loaded_functions.end());
@@ -111,6 +111,17 @@ std::optional<instance::value> instance::execute(std::vector<instruction> new_in
 		case opcode::UNWIND_LOCALS:
 			extended_local_offset -= ins.operand;
 			goto next_ins;
+
+		//other miscellaneous operations
+		case opcode::LOAD_CONSTANT: {
+			evaluation_stack.push_back(constants[ins.operand]);
+			goto next_ins;
+		}
+		case opcode::DISCARD_TOP:
+		{
+			evaluation_stack.pop_back();
+			goto next_ins;
+		}
 
 		//table operations
 		case opcode::LOAD_ARRAY_FIXED:

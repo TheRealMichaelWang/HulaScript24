@@ -31,8 +31,7 @@ namespace HulaScript {
 			uint32_t ip;
 		};
 
-		class value {
-		public:
+		struct value {
 			enum vtype {
 				DICTIONARY = 7,
 				CLOSURE = 6,
@@ -52,11 +51,11 @@ namespace HulaScript {
 				char* str;
 			} data;
 
-			bool is_gc_type() {
+			const bool is_gc_type() {
 				return type >= vtype::ARRAY;
 			}
 
-			bool is_func_type() {
+			const bool is_func_type() {
 				return type == vtype::FUNC_PTR || type == vtype::CLOSURE;
 			}
 
@@ -80,6 +79,10 @@ namespace HulaScript {
 			DECL_LOCAL,
 			DECL_GLOBAL,
 			UNWIND_LOCALS,
+
+			//other miscellaneous operations
+			LOAD_CONSTANT,
+			DISCARD_TOP,
 
 			//table operations
 			LOAD_ARRAY_FIXED,
@@ -160,7 +163,7 @@ namespace HulaScript {
 		std::map<uint64_t, keymap_entry> keymap_entries;
 
 		error last_error;
-		std::optional<value> execute(std::vector<instruction> new_instructions);
+		std::optional<value> execute(const std::vector<instruction>& new_instructions, const std::vector<value>& constants);
 
 		error type_error(value::vtype expected, value::vtype got, uint32_t ip);
 		error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);
