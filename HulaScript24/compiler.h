@@ -23,6 +23,7 @@ namespace HulaScript {
 			enum etype {
 				CANNOT_PARSE_NUMBER,
 				INVALID_CONTROL_CHAR,
+				UNEXPECTED_CHAR,
 				UNEXPECTED_EOF,
 			} type;
 

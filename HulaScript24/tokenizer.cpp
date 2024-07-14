@@ -138,33 +138,33 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		switch (hash)
 		{
 		case str_hash("function"):
-			return token(token_type::FUNCTION);
+			return last_tok = token(token_type::FUNCTION);
 		case str_hash("array"):
-			return token(token_type::ARRAY);
+			return last_tok = token(token_type::ARRAY);
 		case str_hash("dict"):
-			return token(token_type::DICT);
+			return last_tok = token(token_type::DICT);
 		case str_hash("class"):
-			return token(token_type::CLASS);
+			return last_tok = token(token_type::CLASS);
 		case str_hash("if"):
-			return token(token_type::IF);
+			return last_tok = token(token_type::IF);
 		case str_hash("else"):
-			return token(token_type::ELSE);
+			return last_tok = token(token_type::ELSE);
 		case str_hash("elif"):
-			return token(token_type::ELIF);
+			return last_tok = token(token_type::ELIF);
 		case str_hash("while"):
-			return token(token_type::WHILE);
+			return last_tok = token(token_type::WHILE);
 		case str_hash("for"):
-			return token(token_type::FOR);
+			return last_tok = token(token_type::FOR);
 		case str_hash("do"):
-			return token(token_type::DO);
+			return last_tok = token(token_type::DO);
 		case str_hash("return"):
-			return token(token_type::RETURN);
+			return last_tok = token(token_type::RETURN);
 		case str_hash("then"):
-			return token(token_type::THEN);
+			return last_tok = token(token_type::THEN);
 		case str_hash("end"):
-			return token(token_type::END);
+			return last_tok = token(token_type::END);
 		default:
-			return token(identifier);
+			return last_tok = token(identifier);
 		}
 	}
 	else if (isdigit(last_char)) {
@@ -177,6 +177,7 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		double number;
 		try {
 			number = std::stod(numerical_ss.str());
+			return last_tok = token(number);
 		}
 		catch(...) {
 			return error(error::etype::CANNOT_PARSE_NUMBER, "Cannot parse provided numerical string.", token_begin);
@@ -194,6 +195,78 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		}
 		scan_char();
 
-		return token(token_type::STRING_LITERAL, ss.str());
+		return last_tok = token(token_type::STRING_LITERAL, ss.str());
+	}
+	else {
+		char switch_char = last_char;
+		scan_char();
+		switch (switch_char) {
+		case '(':
+			return last_tok = token(token_type::OPEN_PAREN);
+		case ')':
+			return last_tok = token(token_type::CLOSE_PAREN);
+		case '{':
+			return last_tok = token(token_type::OPEN_BRACE);
+		case '}':
+			return last_tok = token(token_type::CLOSE_BRACE);
+		case '[':
+			return last_tok = token(token_type::OPEN_BRACKET);
+		case ']':
+			return last_tok = token(token_type::CLOSE_BRACKET);
+		case '.':
+			return last_tok = token(token_type::PERIOD);
+		case ',':
+			return last_tok = token(token_type::COMMA);
+		case '+':
+			return last_tok = token(token_type::PLUS);
+		case '-':
+			return last_tok = token(token_type::MINUS);
+		case '*':
+			return last_tok = token(token_type::ASTERISK);
+		case '/':
+			return last_tok = token(token_type::SLASH);
+		case '%':
+			return last_tok = token(token_type::PERCENT);
+		case '^':
+			return last_tok = token(token_type::CARET);
+		case '=':
+			if (last_char == '=') {
+				scan_char();
+				return last_tok = token(token_type::EQUALS);
+			}
+			return last_tok = token(token_type::SET);
+		case '>':
+			if (last_char == '=') {
+				scan_char();
+				return last_tok = token(token_type::MORE_EQUAL);
+			}
+			return last_tok = token(token_type::MORE);
+		case '<':
+			if (last_char == '=') {
+				scan_char();
+				return last_tok = token(token_type::LESS_EQUAL);
+			}
+			return last_tok = token(token_type::LESS);
+		case '!':
+			if (last_char == '=') {
+				scan_char();
+				return last_tok = token(token_type::NOT_EQUAL);
+			}
+			return last_tok = token(token_type::NOT);
+		case '&':
+			if (last_char != '&')
+				return error(error::etype::UNEXPECTED_CHAR, "Expected two ampersands(&&), but got something else.", token_begin);
+			scan_char();
+			return last_tok = token(token_type::AND);
+		case '|':
+			if (last_char != '|')
+				return error(error::etype::UNEXPECTED_CHAR, "Expected two bars(||), but got something else.", token_begin);
+			scan_char();
+			return last_tok = token(token_type::OR);
+		case '\0':
+			return last_tok = token(token_type::END_OF_SOURCE);
+		default:
+			break;
+		}
 	}
 }
