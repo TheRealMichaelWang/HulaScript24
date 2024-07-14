@@ -266,7 +266,11 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		case '\0':
 			return last_tok = token(token_type::END_OF_SOURCE);
 		default:
-			break;
+		{
+			std::stringstream ss;
+			ss << "Unexpected character " << last_char << " while parsing token.";
+			return error(error::etype::UNEXPECTED_CHAR, ss.str(), token_begin);
+		}
 		}
 	}
 }
