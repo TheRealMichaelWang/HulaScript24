@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <optional>
 #include <variant>
@@ -20,7 +21,9 @@ namespace HulaScript {
 		class error {
 		public:
 			enum etype {
-				CANNOT_PARSE_NUMBER
+				CANNOT_PARSE_NUMBER,
+				INVALID_CONTROL_CHAR,
+				UNEXPECTED_EOF,
 			} type;
 
 			error(etype type, source_loc location);
@@ -46,11 +49,13 @@ namespace HulaScript {
 				IF,
 				ELIF,
 				ELSE,
-				END,
 				WHILE,
 				FOR,
 				DO,
 				RETURN,
+
+				THEN,
+				END,
 
 				OPEN_PAREN,
 				CLOSE_PAREN,
@@ -59,6 +64,7 @@ namespace HulaScript {
 				OPEN_BRACKET,
 				CLOSE_BRACKET,
 				PERIOD,
+				COMMA,
 
 				PLUS,
 				MINUS,
@@ -74,11 +80,12 @@ namespace HulaScript {
 				EQUALS,
 				NOT_EQUAL,
 				NOT,
+				SET,
 
 				AND,
 				OR,
 
-				END
+				END_OF_SOURCE
 			};
 
 			class token {
@@ -106,7 +113,7 @@ namespace HulaScript {
 				return last_tok;
 			}
 
-			token scan_token();
+			std::variant<token, error> scan_token();
 		private:
 			size_t current_row;
 			size_t current_col;
@@ -121,6 +128,7 @@ namespace HulaScript {
 			std::optional<std::string> file_source;
 
 			char scan_char();
+			std::variant<char, compiler::error> scan_control();
 		};
 	};
 }

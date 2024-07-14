@@ -1,19 +1,9 @@
 #include <cstring>
 #include <cassert>
+#include "hash.h"
 #include "instance.h"
 
 using namespace HulaScript;
-
-uint64_t dj2b_hash(char* str)
-{
-	uint64_t hash = 5381;
-	int c;
-
-	while (c = *str++)
-		hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
-	return hash;
-}
 
 instance::value instance::make_nil() {
 	return {
@@ -38,6 +28,10 @@ instance::value instance::make_string(const char* string) {
 	};
 }
 
+instance::value instance::make_string(std::string str) {
+	return make_string(str.c_str());
+}
+
 uint64_t instance::value::compute_hash() {
 	switch (type)
 	{
@@ -52,7 +46,7 @@ uint64_t instance::value::compute_hash() {
 	case HulaScript::instance::value::FUNC_PTR:
 		return func_id + 1;
 	case HulaScript::instance::value::STRING:
-		return dj2b_hash(data.str) + 1;
+		return str_hash(data.str);
 	case HulaScript::instance::value::NUMBER:
 		return data.table_id + 1;
 	case HulaScript::instance::value::NIL:

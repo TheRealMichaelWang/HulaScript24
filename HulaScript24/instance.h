@@ -122,6 +122,7 @@ namespace HulaScript {
 		value make_nil();
 		value make_number(double number);
 		value make_string(const char* str);
+		value make_string(std::string str);
 	private:
 		struct keymap_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;

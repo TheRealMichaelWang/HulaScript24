@@ -1,5 +1,6 @@
 #include <sstream>
 #include "instance.h"
+#include "compiler.h"
 
 using namespace HulaScript;
 
@@ -46,4 +47,12 @@ instance::error instance::index_error(double number_index, uint32_t index, uint3
 
 	last_error = error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
 	return last_error;
+}
+
+compiler::error::error(etype type, source_loc location) : type(type), location(location), msg(std::nullopt) {
+
+}
+
+compiler::error::error(etype type, std::string message, source_loc location) : type(type), location(location), msg(msg) {
+
 }
