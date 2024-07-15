@@ -2,7 +2,7 @@
 #include <queue>
 #include <set>
 #include <vector>
-#include <assert.h>
+#include <cassert>
 #include "instance.h"
 
 using namespace HulaScript;

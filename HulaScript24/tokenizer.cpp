@@ -32,6 +32,7 @@ compiler::source_loc::source_loc(std::optional<std::string> file) : row(1), colu
 
 compiler::tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), last_tok(token_type::END_OF_SOURCE) {
 	scan_char();
+	scan_token();
 }
 
 char compiler::tokenizer::scan_char() {
@@ -116,6 +117,7 @@ std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 		scan_char();
 		return to_return;
 	}
+#undef NEXT_HEX
 }
 
 std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::scan_token() {
@@ -273,4 +275,79 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		}
 		}
 	}
+}
+
+std::optional<compiler::error> compiler::tokenizer::match(tokenizer::token_type expected) {
+	static const char* tok_names[] = {
+		"IDENTIFIER",
+		"NUMBER",
+		"STRING_LITERAL",
+
+		"FUNCTION",
+		"ARRAY",
+		"DICT",
+		"CLASS",
+
+		"IF",
+		"ELIF",
+		"ELSE",
+		"WHILE",
+		"FOR",
+		"DO",
+		"RETURN",
+
+		"THEN",
+		"END",
+
+		"OPEN_PAREN",
+		"CLOSE_PAREN",
+		"OPEN_BRACE",
+		"CLOSE_BRACE",
+		"OPEN_BRACKET",
+		"CLOSE_BRACKET",
+		"PERIOD",
+		"COMMA",
+
+		"PLUS",
+		"MINUS",
+		"ASTERISK",
+		"SLASH",
+		"PERCENT",
+		"CARET",
+
+		"LESS",
+		"MORE",
+		"LESS_EQUAL",
+		"MORE_EQUAL",
+		"EQUALS",
+		"NOT_EQUAL",
+		"NOT",
+		"SET",
+
+		"AND",
+		"OR",
+
+		"END_OF_SOURCE"
+	};
+
+	if (last_tok.type == expected) {
+		return std::nullopt;
+	}
+
+	std::stringstream ss;
+	ss << "Got token " << tok_names[last_tok.type];
+	if (last_tok.type == token_type::IDENTIFIER)
+		ss << "(" << last_tok.str() << ")";
+	ss << ", but expected " << tok_names[expected] << ".";
+
+	return error(last_tok.type == token_type::END_OF_SOURCE ? error::etype::UNEXPECTED_EOF : error::etype::UNEXPECTED_TOKEN, ss.str(), token_begin);
+}
+
+bool compiler::tokenizer::conditional_scan(token_type type) {
+	if (last_tok.type == type)
+	{
+		scan_token();
+		return true;
+	}
+	return false;
 }

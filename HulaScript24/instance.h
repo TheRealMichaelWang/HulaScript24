@@ -20,6 +20,7 @@ namespace HulaScript {
 				PROPERTY_NOT_FOUND,
 				KEY_NOT_FOUND,
 				MEMORY,
+				INVALID_INSTRUCTION,
 				NONE
 			} type;
 
@@ -95,8 +96,10 @@ namespace HulaScript {
 			STORE_DICT_ELEM,
 			ALLOCATE_ARRAY,
 			ALLOCATE_ARRAY_FIXED,
+			ALLOCATE_ARRAY_LITERAL,
 			ALLOCATE_OBJ,
 			ALLOCATE_DICT,
+			ALLOCATE_DICT_LITERAL,
 
 			//control flow
 			COND_JUMP_AHEAD,
@@ -106,6 +109,7 @@ namespace HulaScript {
 
 			//function 
 			FUNCTION,
+			FUNCTION_END,
 			MAKE_CLOSURE,
 			CALL_CLOSURE,
 			RETURN
@@ -123,6 +127,8 @@ namespace HulaScript {
 		value make_number(double number);
 		value make_string(const char* str);
 		value make_string(std::string str);
+
+		uint32_t add_constant(value constant);
 	private:
 		struct keymap_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;
@@ -146,6 +152,9 @@ namespace HulaScript {
 		std::vector<value> evaluation_stack;
 		std::vector<uint32_t> return_stack;
 
+		std::vector<value> constants;
+		std::map<uint64_t, uint32_t> added_constant_hashes;
+
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals;
 		size_t table_offset, max_table;
 
@@ -164,7 +173,7 @@ namespace HulaScript {
 		std::map<uint64_t, keymap_entry> keymap_entries;
 
 		error last_error;
-		std::optional<value> execute(const std::vector<instruction>& new_instructions, const std::vector<value>& constants);
+		std::optional<value> execute(const std::vector<instruction>& new_instructions);
 
 		error type_error(value::vtype expected, value::vtype got, uint32_t ip);
 		error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);

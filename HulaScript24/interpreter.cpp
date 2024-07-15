@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <cassert>
 #include <sstream>
 #include "instance.h"
 
@@ -10,7 +10,7 @@ struct loaded_function_entry {
 	uint32_t global_addr;
 };
 
-std::optional<instance::value> instance::execute(const std::vector<instruction>& new_instructions, const std::vector<value>& constants) {
+std::optional<instance::value> instance::execute(const std::vector<instruction>& new_instructions) {
 	std::vector<instruction> total_instructions(loaded_functions.size() + new_instructions.size());
 
 	total_instructions.insert(total_instructions.begin(), loaded_functions.begin(), loaded_functions.end());
@@ -412,6 +412,15 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			});
 
 			ip = entry.start_address + entry.length;
+
+
+
+			instruction end_ins = instructions[ip];
+			if (end_ins.op != opcode::FUNCTION_END) {
+				last_error = error(error::etype::INVALID_INSTRUCTION, "Missing end function instruction.", ip);
+				goto error_return;
+			}
+
 			continue;
 		}
 		case opcode::MAKE_CLOSURE: 

@@ -133,6 +133,7 @@
     <ClInclude Include="hash.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="compiler.cpp" />
     <ClCompile Include="error.cpp" />
     <ClCompile Include="garbage_collector.cpp" />
     <ClCompile Include="instance.cpp" />

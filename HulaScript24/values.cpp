@@ -32,6 +32,19 @@ instance::value instance::make_string(std::string str) {
 	return make_string(str.c_str());
 }
 
+uint32_t instance::add_constant(value constant) {
+	uint64_t hash = constant.compute_hash();
+
+	auto it = added_constant_hashes.find(hash);
+	if (it == added_constant_hashes.end()) {
+		uint32_t id = constants.size();
+		constants.push_back(constant);
+		added_constant_hashes.insert({ hash, id });
+		return id;
+	}
+	return it->second;
+}
+
 uint64_t instance::value::compute_hash() {
 	switch (type)
 	{

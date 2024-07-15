@@ -4,6 +4,9 @@
 #include <string>
 #include <optional>
 #include <variant>
+#include <vector>
+#include <set>
+#include "instance.h"
 
 namespace HulaScript {
 	class compiler {
@@ -25,6 +28,7 @@ namespace HulaScript {
 				INVALID_CONTROL_CHAR,
 				UNEXPECTED_CHAR,
 				UNEXPECTED_EOF,
+				UNEXPECTED_TOKEN,
 			} type;
 
 			error(etype type, source_loc location);
@@ -91,6 +95,8 @@ namespace HulaScript {
 
 			class token {
 			public:
+				token_type type;
+
 				token(token_type type);
 				token(token_type type, std::string identifier);
 				token(std::string identifier);
@@ -104,7 +110,6 @@ namespace HulaScript {
 					return std::get<double>(payload);
 				}
 			private:
-				token_type type;
 				std::variant<std::monostate, std::string, double> payload;
 			};
 
@@ -114,7 +119,13 @@ namespace HulaScript {
 				return last_tok;
 			}
 
+			bool match_last(token_type type) {
+				return last_tok.type == type;
+			}
+
 			std::variant<token, error> scan_token();
+			std::optional<error> match(tokenizer::token_type expected);
+			bool conditional_scan(token_type type);
 		private:
 			size_t current_row;
 			size_t current_col;
@@ -131,5 +142,10 @@ namespace HulaScript {
 			char scan_char();
 			std::variant<char, compiler::error> scan_control();
 		};
+
+		compiler();
+
+	private:
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 	};
 }

@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include <assert.h>
+#include <cassert>
 #include "instance.h"
 
 using namespace HulaScript;
