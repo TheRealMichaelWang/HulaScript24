@@ -42,8 +42,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 
 		switch (ins.op)
 		{
-
-			//arithmetic operations
+		//arithmetic operations
 		case opcode::ADD: {
 			LOAD_OPERAND(b, value::vtype::NUMBER);
 			LOAD_OPERAND(a, value::vtype::NUMBER);
@@ -120,6 +119,14 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		case opcode::DISCARD_TOP:
 		{
 			evaluation_stack.pop_back();
+			goto next_ins;
+		}
+		case opcode::CHECK_TYPE: {
+			if (evaluation_stack.back().type != ins.operand)
+			{
+				type_error((value::vtype)ins.operand, evaluation_stack.back().type, ip);
+				goto error_return;
+			}
 			goto next_ins;
 		}
 
@@ -327,6 +334,27 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			});
 			goto next_ins;
 		}
+		case opcode::ALLOCATE_ARRAY_LITERAL: {
+			std::optional<uint64_t> res = allocate_table(ins.operand);
+			if (!res.has_value()) {
+				std::stringstream ss;
+				ss << "Failed to allocate new array with " << ins.operand << " elements.";
+				last_error = error(error::etype::MEMORY, ss.str(), ip);
+				goto error_return;
+			}
+			
+			table_entry entry = table_entries[res.value()];
+			for (int_fast32_t i = (int32_t)entry.length - 1; i >= 0; i--) {
+				table_elems[entry.table_start + i] = evaluation_stack.back();
+				evaluation_stack.pop_back();
+			}
+			evaluation_stack.push_back({
+				.type = value::vtype::ARRAY,
+				.data = {.table_id = res.value() }
+			});
+
+			goto next_ins;
+		}
 		case opcode::ALLOCATE_OBJ: {
 			std::optional<uint64_t> res = allocate_table(ins.operand);
 			if (!res.has_value()) {
@@ -403,6 +431,12 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				.start_address = ip + 1,
 				.length = ins.operand
 			};
+			ip = entry.start_address + entry.length;
+
+			instruction end_ins = instructions[ip];
+			assert(end_ins.operand == opcode::FUNCTION_END);
+
+			entry.parameter_count = end_ins.operand;
 			function_entries.insert({ id, entry });
 			loaded_functions.push_back(id);
 
@@ -411,18 +445,12 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				.func_id = id
 			});
 
-			ip = entry.start_address + entry.length;
-
-
-
-			instruction end_ins = instructions[ip];
-			if (end_ins.op != opcode::FUNCTION_END) {
-				last_error = error(error::etype::INVALID_INSTRUCTION, "Missing end function instruction.", ip);
-				goto error_return;
-			}
-
+			ip++;
 			continue;
 		}
+		case opcode::FUNCTION_END:
+			last_error = error(error::etype::INVALID_INSTRUCTION, "Function end by itself isn't a valid instruction.", ip);
+			goto error_return;
 		case opcode::MAKE_CLOSURE: 
 		{
 			std::optional<uint64_t> alloc_res = allocate_table(ins.operand);

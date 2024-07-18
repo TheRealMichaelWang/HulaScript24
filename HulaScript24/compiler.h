@@ -29,6 +29,9 @@ namespace HulaScript {
 				UNEXPECTED_CHAR,
 				UNEXPECTED_EOF,
 				UNEXPECTED_TOKEN,
+				PROPERTY_DOES_NOT_EXIST,
+				INDEX_OUT_OF_RANGE,
+				TYPE_ERROR,
 			} type;
 
 			error(etype type, source_loc location);
@@ -115,8 +118,12 @@ namespace HulaScript {
 
 			tokenizer(std::string source, std::optional<std::string> file_source);
 
-			token last_token() {
+			token& last_token() {
 				return last_tok;
+			}
+
+			source_loc& last_token_loc() {
+				return token_begin;
 			}
 
 			bool match_last(token_type type) {
@@ -125,7 +132,8 @@ namespace HulaScript {
 
 			std::variant<token, error> scan_token();
 			std::optional<error> match(tokenizer::token_type expected);
-			bool conditional_scan(token_type type);
+
+			compiler::error make_unexpected_tok_err(std::optional< compiler::tokenizer::token_type> expected);
 		private:
 			size_t current_row;
 			size_t current_col;
@@ -146,6 +154,58 @@ namespace HulaScript {
 		compiler();
 
 	private:
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		enum value_type {
+			ARRAY = 1,
+			DICTIONARY = 2,
+			OBJECT = 3,
+			FUNCTION = 4,
+			STRING = 5,
+			NUMBER = 6,
+			ANY
+		};
+
+		struct class_declaration {
+			struct property_info {
+				std::string name;
+				value_type type;
+			};
+
+			std::string name;
+			std::map<uint64_t, property_info> properties;
+		};
+
+		struct function_declaration {
+			struct param {
+				std::string name;
+				value_type type = value_type::ANY;
+				bool is_mutable;
+			};
+
+			std::string name;
+
+			std::vector<param> param_types;
+			value_type return_type;
+		};
+
+		struct value_info {
+			value_type type = value_type::ANY;
+			std::optional<uint32_t> array_length;
+			std::optional<class_declaration> class_decl;
+			std::optional<function_declaration> func_decl;
+
+			value_info* clear_details_ref = NULL;
+			int is_mutable = 0;
+
+			void clear() {
+				if (clear_details_ref != NULL) {
+					clear_details_ref->array_length = std::nullopt;
+					clear_details_ref->class_decl = std::nullopt;
+					clear_details_ref->func_decl = std::nullopt;
+				}
+			}
+		};
+
+		std::variant<value_info, error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::variant<value_info, error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 	};
 }

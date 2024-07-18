@@ -99,7 +99,6 @@ namespace HulaScript {
 			ALLOCATE_ARRAY_LITERAL,
 			ALLOCATE_OBJ,
 			ALLOCATE_DICT,
-			ALLOCATE_DICT_LITERAL,
 
 			//control flow
 			COND_JUMP_AHEAD,
@@ -110,6 +109,7 @@ namespace HulaScript {
 			//function 
 			FUNCTION,
 			FUNCTION_END,
+			CHECK_ARGS,
 			MAKE_CLOSURE,
 			CALL_CLOSURE,
 			RETURN
@@ -143,6 +143,8 @@ namespace HulaScript {
 		struct loaded_function_entry {
 			uint32_t start_address;
 			uint32_t length;
+
+			uint32_t parameter_count;
 		};
 
 		value* local_elems;
