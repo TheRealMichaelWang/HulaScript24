@@ -4,12 +4,6 @@
 
 using namespace HulaScript;
 
-struct loaded_function_entry {
-	uint32_t begin_ip;
-	uint32_t length;
-	uint32_t global_addr;
-};
-
 std::optional<instance::value> instance::execute(const std::vector<instruction>& new_instructions) {
 	std::vector<instruction> total_instructions(loaded_functions.size() + new_instructions.size());
 
@@ -121,173 +115,49 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			evaluation_stack.pop_back();
 			goto next_ins;
 		}
-		case opcode::CHECK_TYPE: {
-			if (evaluation_stack.back().type != ins.operand)
-			{
-				type_error((value::vtype)ins.operand, evaluation_stack.back().type, ip);
-				goto error_return;
-			}
-			goto next_ins;
-		}
 
 		//table operations
-		case opcode::LOAD_ARRAY_FIXED:
-		{
-			LOAD_OPERAND(array_val, value::vtype::ARRAY);
-
-			evaluation_stack.push_back(table_elems[table_entries[array_val.data.table_id].table_start + ins.operand]);
-			goto next_ins;
-		}
-		case opcode::LOAD_ARRAY_ELEM:
-		load_array_elem:
-		{
-			LOAD_OPERAND(index_val, value::vtype::NUMBER);
-			LOAD_OPERAND(array_val, value::vtype::ARRAY);
-
-			table_entry array_entry = table_entries[array_val.data.table_id];
-			NORMALIZE_ARRAY_INDEX(index_val, array_entry.length);
-
-			evaluation_stack.push_back(table_elems[array_entry.table_start + index]);
-			goto next_ins;
-		}
-		case opcode::LOAD_OBJ_PROP:
-		{
-			LOAD_OPERAND(obj_val, value::vtype::OBJECT);
-
-			table_entry table_entry = table_entries[obj_val.data.table_id];
-			keymap_entry proto_entry = keymap_entries[obj_val.data.table_id];
-
-			auto it = proto_entry.hash_to_index.find(ins.operand);
-			if (it == proto_entry.hash_to_index.end())
-			{
-				last_error = error(error::etype::PROPERTY_NOT_FOUND, ip);
-				goto error_return;
-			}
-
-			evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
-			goto next_ins;
-		}
-		case opcode::LOAD_DICT_ELEM: 
+		case opcode::LOAD_TABLE_ELEM: 
 		{
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			value dict_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
+			LOAD_OPERAND(table_val, value::vtype::TABLE);
 
-			if (dict_val.type == value::vtype::ARRAY) {
-				evaluation_stack.push_back(dict_val);
-				evaluation_stack.push_back(key_val);
-				goto load_array_elem;
-			}
-			else if (dict_val.type != value::vtype::DICTIONARY) {
-				type_error(value::vtype::DICTIONARY, dict_val.type, ip);
-				goto error_return;
-			}
-
-			table_entry table_entry = table_entries[dict_val.data.table_id];
-			keymap_entry proto_entry = keymap_entries[dict_val.data.table_id];
+			table_entry& table_entry = table_entries[table_val.data.table_id];
 			uint64_t hash = key_val.compute_hash();
 			
-			auto it = proto_entry.hash_to_index.find(hash);
-			if (it == proto_entry.hash_to_index.end()) {
-				last_error = error(error::etype::KEY_NOT_FOUND, ip);
-				goto error_return;
-			}
-
-			evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
-			goto next_ins;
-		}
-		case opcode::STORE_ARRAY_FIXED:
-		{
-			value store_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
-			LOAD_OPERAND(array_val, value::vtype::ARRAY);
-			table_elems[table_entries[array_val.data.table_id].table_start + ins.operand] = store_val;
-
-			evaluation_stack.push_back(store_val);
-			goto next_ins;
-		}
-		case opcode::STORE_ARRAY_ELEM:
-		store_array_elem:
-		{
-			value store_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
-			LOAD_OPERAND(index_val, value::vtype::NUMBER);
-			LOAD_OPERAND(array_val, value::vtype::ARRAY);
-
-			table_entry array_entry = table_entries[array_val.data.table_id];
-			NORMALIZE_ARRAY_INDEX(index_val, array_entry.length);
-
-			table_elems[array_entry.table_start + index] = store_val;
-			evaluation_stack.push_back(store_val);
-			goto next_ins;
-		}
-		case opcode::STORE_OBJ_PROP: 
-		{
-			value store_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
-			LOAD_OPERAND(obj_val, value::vtype::OBJECT);
-
-			table_entry table_entry = table_entries[obj_val.data.table_id];
-			auto proto_entry = keymap_entries.find(obj_val.data.table_id);
-			assert(proto_entry != keymap_entries.end());
-			auto it = proto_entry->second.hash_to_index.find(ins.operand);
-			if (it == proto_entry->second.hash_to_index.end())
-			{
-				if (proto_entry->second.count == table_entry.length) {
-					last_error = error(error::etype::MEMORY, "Failed to add property to object.", ip);
-					goto error_return;
-				}
-
-				proto_entry->second.hash_to_index.insert({ ins.operand, proto_entry->second.count });
-				table_elems[table_entry.table_start + table_entry.length] = store_val;
-				proto_entry->second.count++;
+			auto it = table_entry.hash_to_index.find(hash);
+			if (it == table_entry.hash_to_index.end()) {
+				evaluation_stack.push_back(make_nil());
 			}
 			else {
-				table_elems[table_entry.table_start + it->second] = store_val;
+				evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
 			}
-
-			evaluation_stack.push_back(store_val);
 			goto next_ins;
 		}
-		case opcode::STORE_DICT_ELEM: {
+		case opcode::STORE_TABLE_ELEM: {
 			value store_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			value dict_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
+			LOAD_OPERAND(table_val, value::vtype::TABLE);
 
-			if (dict_val.type == value::vtype::ARRAY) {
-				evaluation_stack.push_back(dict_val);
-				evaluation_stack.push_back(key_val);
-				evaluation_stack.push_back(dict_val);
-				goto store_array_elem;
-			}
-			else if (dict_val.type != value::vtype::DICTIONARY) {
-				type_error(value::vtype::DICTIONARY, dict_val.type, ip);
-				goto error_return;
-			}
-
-			table_entry table_entry = table_entries[dict_val.data.table_id];
-			auto proto_entry = keymap_entries.find(dict_val.data.table_id);
-			assert(proto_entry != keymap_entries.end());
+			table_entry& table_entry = table_entries[table_val.data.table_id];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = proto_entry->second.hash_to_index.find(hash);
-
-			if (it == proto_entry->second.hash_to_index.end()) { //add new key to dictionary
-				if (proto_entry->second.count == table_entry.length) {
-					if (!reallocate_table(dict_val.data.table_id, 4, 1))
+			auto it = table_entry.hash_to_index.find(hash);
+			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
+				if (table_entry.used_elems == table_entry.allocated_capacity) {
+					if (!reallocate_table(table_val.data.table_id, 4, 1))
 					{
-						last_error = error(error::etype::MEMORY, "Failed to add to dictionary.", ip);
+						last_error = error(error::etype::MEMORY, "Failed to add to table.", ip);
 						goto error_return;
 					}
 				}
 
-				proto_entry->second.hash_to_index.insert({ hash, proto_entry->second.count });
-				table_elems[table_entry.table_start + table_entry.length] = store_val;
-				proto_entry->second.count++;
+				table_entry.hash_to_index.insert({ hash, table_entry.used_elems });
+				table_elems[table_entry.table_start + table_entry.used_elems] = store_val;
+				table_entry.used_elems++;
 			}
 			else { //write to existing value
 				table_elems[table_entry.table_start + it->second] = store_val;
@@ -296,7 +166,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			evaluation_stack.push_back(store_val);
 			goto next_ins;
 		}
-		case opcode::ALLOCATE_ARRAY:
+		case opcode::ALLOCATE_DYN:
 		{
 			LOAD_OPERAND(length_val, value::vtype::NUMBER);
 			
@@ -304,7 +174,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			std::optional<uint64_t> res = allocate_table(size);
 			if (!res.has_value()) {
 				std::stringstream ss;
-				ss << "Failed to allocate new array with " << length_val.data.number << " elements";
+				ss << "Failed to allocate new table with " << length_val.data.number << " elements";
 				if (size != length_val.data.number) {
 					ss << "(rounded to " << size << ")";
 				}
@@ -314,13 +184,13 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			}
 
 			evaluation_stack.push_back({
-				.type = value::vtype::ARRAY,
+				.type = value::vtype::TABLE,
 				.data = {.table_id = res.value() }
 			});
 
 			goto next_ins;
 		}
-		case opcode::ALLOCATE_ARRAY_FIXED: {
+		case opcode::ALLOCATE_FIXED: {
 			std::optional<uint64_t> res = allocate_table(ins.operand);
 			if (!res.has_value()) {
 				std::stringstream ss;
@@ -329,68 +199,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				goto error_return;
 			}
 			evaluation_stack.push_back({
-				.type = value::vtype::ARRAY,
+				.type = value::vtype::TABLE,
 				.data = {.table_id = res.value() }
 			});
-			goto next_ins;
-		}
-		case opcode::ALLOCATE_ARRAY_LITERAL: {
-			std::optional<uint64_t> res = allocate_table(ins.operand);
-			if (!res.has_value()) {
-				std::stringstream ss;
-				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
-				goto error_return;
-			}
-			
-			table_entry entry = table_entries[res.value()];
-			for (int_fast32_t i = (int32_t)entry.length - 1; i >= 0; i--) {
-				table_elems[entry.table_start + i] = evaluation_stack.back();
-				evaluation_stack.pop_back();
-			}
-			evaluation_stack.push_back({
-				.type = value::vtype::ARRAY,
-				.data = {.table_id = res.value() }
-			});
-
-			goto next_ins;
-		}
-		case opcode::ALLOCATE_OBJ: {
-			std::optional<uint64_t> res = allocate_table(ins.operand);
-			if (!res.has_value()) {
-				std::stringstream ss;
-				ss << "Failed to allocate new object with " << ins.operand << " elements.";
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
-				goto error_return;
-			}
-			
-			evaluation_stack.push_back({
-				.type = value::vtype::OBJECT,
-				.data = {.table_id = res.value() }
-			});
-			keymap_entries.insert({ res.value(), {
-				.count = 0
-			}});
-			goto next_ins;
-		}
-		case opcode::ALLOCATE_DICT: {
-			uint32_t size = ins.operand == 0 ? 8 : ins.operand;
-			std::optional<uint64_t> res = allocate_table(size);
-
-			if (!res.has_value()) {
-				std::stringstream ss;
-				ss << "Failed to allocate new dictionary with " << size << " elements.";
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
-				goto error_return;
-			}
-
-			evaluation_stack.push_back({
-				.type = value::vtype::DICTIONARY,
-				.data = {.table_id = res.value() }
-			});
-			keymap_entries.insert({ res.value(), {
-				.count = 0
-			} });
 			goto next_ins;
 		}
 
@@ -449,7 +260,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			continue;
 		}
 		case opcode::FUNCTION_END:
-			last_error = error(error::etype::INVALID_INSTRUCTION, "Function end by itself isn't a valid instruction.", ip);
+			last_error = error(error::etype::INTERNAL_ERROR, "Function end by itself isn't a valid instruction.", ip);
 			goto error_return;
 		case opcode::MAKE_CLOSURE: 
 		{
@@ -465,6 +276,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 
 			for (uint_fast32_t i = 0; i < ins.operand; i++) {
 				table_elems[table_entry.table_start + i] = evaluation_stack.back();
+				table_entry.used_elems++;
 				evaluation_stack.pop_back();
 			}
 
@@ -477,18 +289,24 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			});
 			goto next_ins;
 		}
-		case opcode::CALL_CLOSURE: 
+		case opcode::CALL: 
 		{
-			LOAD_OPERAND(closure_val, value::vtype::CLOSURE)
+			value fn_val = evaluation_stack.back();
+			evaluation_stack.pop_back();
 
-			return_stack.push_back(ip);
-			table_entry closure_entry = table_entries[closure_val.data.table_id];
-
-			for (uint_fast32_t i = 0; i < closure_entry.length; i++) {
-				evaluation_stack.push_back(table_elems[closure_entry.table_start + i]);
+			if (fn_val.type == value::vtype::CLOSURE) {
+				table_entry& closure_entry = table_entries[fn_val.data.table_id];
+				for (uint_fast32_t i = 0; i < closure_entry.used_elems; i++) {
+					evaluation_stack.push_back(table_elems[closure_entry.table_start + i]);
+				}
+			}
+			else if (fn_val.type != value::vtype::FUNC_PTR) {
+				type_error(value::vtype::FUNC_PTR, fn_val.type, ip);
+				goto error_return;
 			}
 
-			ip = function_entries[closure_val.data.table_id].start_address;
+			return_stack.push_back(ip);
+			ip = function_entries[fn_val.func_id].start_address;
 			continue;
 		}
 		case opcode::RETURN:

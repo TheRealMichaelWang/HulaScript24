@@ -16,11 +16,8 @@ namespace HulaScript {
 		public:
 			enum etype {
 				UNEXPECTED_TYPE,
-				INDEX_OUT_OF_RANGE,
-				PROPERTY_NOT_FOUND,
-				KEY_NOT_FOUND,
 				MEMORY,
-				INVALID_INSTRUCTION,
+				INTERNAL_ERROR,
 				NONE
 			} type;
 
@@ -34,10 +31,8 @@ namespace HulaScript {
 
 		struct value {
 			enum vtype {
-				DICTIONARY = 7,
-				CLOSURE = 6,
-				OBJECT = 5,
-				ARRAY = 4,
+				CLOSURE = 5,
+				TABLE = 4,
 				FUNC_PTR = 3,
 				STRING = 2,
 				NUMBER = 1,
@@ -53,7 +48,7 @@ namespace HulaScript {
 			} data;
 
 			const bool is_gc_type() {
-				return type >= vtype::ARRAY;
+				return type >= vtype::TABLE;
 			}
 
 			const bool is_func_type() {
@@ -86,19 +81,12 @@ namespace HulaScript {
 			DISCARD_TOP,
 
 			//table operations
-			LOAD_ARRAY_FIXED,
-			LOAD_ARRAY_ELEM,
-			LOAD_OBJ_PROP,
-			LOAD_DICT_ELEM,
-			STORE_ARRAY_FIXED,
-			STORE_ARRAY_ELEM,
-			STORE_OBJ_PROP,
-			STORE_DICT_ELEM,
-			ALLOCATE_ARRAY,
-			ALLOCATE_ARRAY_FIXED,
-			ALLOCATE_ARRAY_LITERAL,
-			ALLOCATE_OBJ,
-			ALLOCATE_DICT,
+			LOAD_TABLE_ELEM,
+			STORE_TABLE_ELEM,
+			LOAD_TABLE_PROP,
+			STORE_TABLE_PROP,
+			ALLOCATE_DYN,
+			ALLOCATE_FIXED,
 
 			//control flow
 			COND_JUMP_AHEAD,
@@ -111,7 +99,7 @@ namespace HulaScript {
 			FUNCTION_END,
 			CHECK_ARGS,
 			MAKE_CLOSURE,
-			CALL_CLOSURE,
+			CALL,
 			RETURN
 		};
 
@@ -130,14 +118,12 @@ namespace HulaScript {
 
 		uint32_t add_constant(value constant);
 	private:
-		struct keymap_entry {
-			std::map<uint64_t, uint32_t> hash_to_index;
-			int count = 0;
-		};
-
 		struct table_entry {
+			std::map<uint64_t, uint32_t> hash_to_index;
+			uint32_t used_elems;
+
 			size_t table_start;
-			uint32_t length;
+			uint32_t allocated_capacity;
 		};
 
 		struct loaded_function_entry {
@@ -171,8 +157,6 @@ namespace HulaScript {
 		uint64_t max_table_id;
 		std::set<table_entry, bool(*)(table_entry, table_entry)> free_tables;
 		std::set<char*> active_strs;
-
-		std::map<uint64_t, keymap_entry> keymap_entries;
 
 		error last_error;
 		std::optional<value> execute(const std::vector<instruction>& new_instructions);
