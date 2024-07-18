@@ -154,58 +154,18 @@ namespace HulaScript {
 		compiler();
 
 	private:
-		enum value_type {
-			ARRAY = 1,
-			DICTIONARY = 2,
-			OBJECT = 3,
-			FUNCTION = 4,
-			STRING = 5,
-			NUMBER = 6,
-			ANY
-		};
-
 		struct class_declaration {
-			struct property_info {
-				std::string name;
-				value_type type;
-			};
-
 			std::string name;
-			std::map<uint64_t, property_info> properties;
+			std::vector<std::string> properties;
 		};
 
 		struct function_declaration {
-			struct param {
-				std::string name;
-				value_type type = value_type::ANY;
-				bool is_mutable;
-			};
-
 			std::string name;
 
-			std::vector<param> param_types;
-			value_type return_type;
+			std::vector<std::string> params;
 		};
 
-		struct value_info {
-			value_type type = value_type::ANY;
-			std::optional<uint32_t> array_length;
-			std::optional<class_declaration> class_decl;
-			std::optional<function_declaration> func_decl;
-
-			value_info* clear_details_ref = NULL;
-			int is_mutable = 0;
-
-			void clear() {
-				if (clear_details_ref != NULL) {
-					clear_details_ref->array_length = std::nullopt;
-					clear_details_ref->class_decl = std::nullopt;
-					clear_details_ref->func_decl = std::nullopt;
-				}
-			}
-		};
-
-		std::variant<value_info, error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::variant<value_info, error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 	};
 }

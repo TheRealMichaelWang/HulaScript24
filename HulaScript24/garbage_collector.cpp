@@ -8,19 +8,19 @@
 using namespace HulaScript;
 
 std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t element_count) {
-	auto free_table_it = free_tables.lower_bound({ .length = element_count });
+	auto free_table_it = free_tables.lower_bound({ .allocated_capacity = element_count });
 	if (free_table_it != free_tables.end()) {
 		table_entry new_entry = {
 			.table_start = free_table_it->table_start,
-			.length = element_count
+			.allocated_capacity = element_count
 		};
-		uint32_t unused_elem_count = free_table_it->length - element_count;
+		uint32_t unused_elem_count = free_table_it->allocated_capacity - element_count;
 		free_tables.erase(free_table_it);
 
 		if (unused_elem_count > 0) {
 			free_tables.insert({
-				.table_start = new_entry.table_start + new_entry.length,
-				.length = unused_elem_count
+				.table_start = new_entry.table_start + new_entry.allocated_capacity,
+				.allocated_capacity = unused_elem_count
 			});
 		}
 
@@ -35,11 +35,8 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 
 	table_entry new_entry = {
 		.table_start = table_offset, //table_start,
-		.length = element_count //length
+		.allocated_capacity = element_count //length
 	};
-	for (uint_fast32_t i = 0; i < new_entry.length; i++) {
-		table_elems[new_entry.table_start + i] = make_nil();
-	}
 	table_offset += element_count;
 
 	return std::make_optional(new_entry);
@@ -61,9 +58,7 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	}
 	
 	table_entry table_entry = res.value();
-	for (uint_fast32_t i = 0; i < table_entry.length; i++) {
-		table_elems[table_entry.table_start + i] = make_nil();
-	}
+	table_entry.used_elems = 0;
 	table_entries.insert({ id, table_entry });
 	return id;
 }
@@ -73,32 +68,34 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 	auto it = table_entries.find(table_id);
 	assert(it != table_entries.end());
 
-	table_entry entry = it->second;
+	table_entry& entry = it->second;
 
-	if (element_count > entry.length) { //expand allocation
+	if (element_count > entry.allocated_capacity) { //expand allocation
 		std::optional<table_entry> alloc_res = allocate_table_no_id(element_count);
 		if (!alloc_res.has_value())
 			return false;
 
-		table_entry new_entry = alloc_res.value();
-		std::memmove(&table_elems[new_entry.table_start], &table_elems[entry.table_start], entry.length);
-		it->second = new_entry;
+		size_t old_start = entry.table_start;
+		uint32_t old_len = entry.used_elems;
+		entry = alloc_res.value();
+		std::memmove(&table_elems[entry.table_start], &table_elems[old_start], old_len);
+		entry.used_elems = old_len;
 
 		free_tables.insert({
 			.table_start = entry.table_start,
-			.length = entry.length
+			.allocated_capacity = entry.allocated_capacity
 		});
 		return true;
 	}
-	else if(element_count < entry.length) {
-		it->second = {
+	else if(element_count < entry.allocated_capacity) {
+		entry = {
 			.table_start = entry.table_start,
-			.length = element_count
+			.allocated_capacity = element_count
 		};
 
 		free_tables.insert({
 			.table_start = entry.table_start + element_count,
-			.length = entry.length - element_count
+			.allocated_capacity = entry.allocated_capacity - element_count
 		});
 		return true;
 	}
@@ -111,7 +108,7 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uin
 	assert(it != table_entries.end());
 
 	for (uint32_t size = max_elem_extend; size >= min_elem_extend; size--) {
-		if (reallocate_table(table_id, it->second.length + size))
+		if (reallocate_table(table_id, it->second.allocated_capacity + size))
 			return true;
 	}
 	return false;
@@ -150,7 +147,7 @@ void instance::garbage_collect() {
 
 		marked_tables.emplace(id);
 		
-		for (int i = 0; i < entry.length; i++) {
+		for (int i = 0; i < entry.used_elems; i++) {
 			instance::value val = table_elems[i + entry.table_start];
 			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
 				tables_to_mark.push(val.data.table_id);
@@ -164,10 +161,6 @@ void instance::garbage_collect() {
 	//sweep unreachable tables
 	for (auto table_it = table_entries.begin(); table_it != table_entries.end(); table_it++) {
 		if (!marked_tables.contains(table_it->first)) {
-			auto proto_it = keymap_entries.find(table_it->first);
-			if (proto_it != keymap_entries.end())
-				proto_it = keymap_entries.erase(proto_it);
-
 			available_table_ids.push(table_it->first);
 			table_it = table_entries.erase(table_it);
 		}
@@ -189,10 +182,10 @@ void instance::garbage_collect() {
 		if (entry.table_start == new_table_offset)
 			continue;
 
-		std::memmove(&table_elems[entry.table_start], &table_elems[new_table_offset], entry.length);
+		std::memmove(&table_elems[entry.table_start], &table_elems[new_table_offset], entry.used_elems);
 
 		table_entries[id].table_start = new_table_offset;
-		new_table_offset += entry.length;
+		new_table_offset += entry.used_elems;
 	}
 
 	table_offset = new_table_offset;
@@ -231,7 +224,7 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 
 		marked_tables.emplace(id);
 
-		for (int i = 0; i < entry.length; i++) {
+		for (int i = 0; i < entry.used_elems; i++) {
 			instance::value val = table_elems[i + entry.table_start];
 			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
 				tables_to_mark.push(val.data.table_id);
