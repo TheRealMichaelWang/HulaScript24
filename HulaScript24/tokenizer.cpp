@@ -277,7 +277,7 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 	}
 }
 
-std::optional<compiler::error> compiler::tokenizer::match(tokenizer::token_type expected) {
+compiler::error compiler::tokenizer::make_unexpected_tok_err(std::optional< compiler::tokenizer::token_type> expected) {
 	static const char* tok_names[] = {
 		"IDENTIFIER",
 		"NUMBER",
@@ -330,24 +330,23 @@ std::optional<compiler::error> compiler::tokenizer::match(tokenizer::token_type 
 		"END_OF_SOURCE"
 	};
 
-	if (last_tok.type == expected) {
-		return std::nullopt;
-	}
-
 	std::stringstream ss;
 	ss << "Got token " << tok_names[last_tok.type];
 	if (last_tok.type == token_type::IDENTIFIER)
 		ss << "(" << last_tok.str() << ")";
-	ss << ", but expected " << tok_names[expected] << ".";
+	
+	if(expected.has_value())
+		ss << ", but expected " << tok_names[expected.value()];
+
+	ss << '.';
 
 	return error(last_tok.type == token_type::END_OF_SOURCE ? error::etype::UNEXPECTED_EOF : error::etype::UNEXPECTED_TOKEN, ss.str(), token_begin);
 }
 
-bool compiler::tokenizer::conditional_scan(token_type type) {
-	if (last_tok.type == type)
-	{
-		scan_token();
-		return true;
+std::optional<compiler::error> compiler::tokenizer::match(tokenizer::token_type expected) {
+	if (last_tok.type == expected) {
+		return std::nullopt;
 	}
-	return false;
+
+	return make_unexpected_tok_err(expected);
 }
