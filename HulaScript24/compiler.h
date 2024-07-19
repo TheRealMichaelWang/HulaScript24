@@ -50,7 +50,7 @@ namespace HulaScript {
 				STRING_LITERAL,
 
 				FUNCTION,
-				ARRAY,
+				TABLE,
 				DICT,
 				CLASS,
 

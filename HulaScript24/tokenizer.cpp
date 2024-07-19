@@ -142,7 +142,7 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		case str_hash("function"):
 			return last_tok = token(token_type::FUNCTION);
 		case str_hash("array"):
-			return last_tok = token(token_type::ARRAY);
+			return last_tok = token(token_type::TABLE);
 		case str_hash("dict"):
 			return last_tok = token(token_type::DICT);
 		case str_hash("class"):
@@ -284,7 +284,7 @@ compiler::error compiler::tokenizer::make_unexpected_tok_err(std::optional< comp
 		"STRING_LITERAL",
 
 		"FUNCTION",
-		"ARRAY",
+		"TABLE",
 		"DICT",
 		"CLASS",
 

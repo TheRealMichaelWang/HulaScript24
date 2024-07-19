@@ -45,19 +45,18 @@ uint32_t instance::add_constant(value constant) {
 	return it->second;
 }
 
-uint64_t instance::value::compute_hash() {
+uint32_t instance::value::compute_hash() {
+	uint32_t init;
 	switch (type)
 	{
-	case HulaScript::instance::value::DICTIONARY:
-		[[fallthrough]];
 	case HulaScript::instance::value::CLOSURE:
 		[[fallthrough]];
-	case HulaScript::instance::value::OBJECT:
-		[[fallthrough]];
-	case HulaScript::instance::value::ARRAY:
-		return data.table_id + 1;
+	case HulaScript::instance::value::TABLE:
+		init = data.table_id + 1;
+		break;
 	case HulaScript::instance::value::FUNC_PTR:
-		return func_id + 1;
+		init = func_id + 1;
+		break;
 	case HulaScript::instance::value::STRING:
 		return str_hash(data.str);
 	case HulaScript::instance::value::NUMBER:
