@@ -37,7 +37,7 @@ namespace HulaScript {
 				STRING = 2,
 				NUMBER = 1,
 				NIL = 0
-			} type;
+			} type = vtype::NIL;
 
 			uint32_t func_id;
 
@@ -55,7 +55,7 @@ namespace HulaScript {
 				return type == vtype::FUNC_PTR || type == vtype::CLOSURE;
 			}
 
-			uint64_t compute_hash();
+			uint32_t compute_hash();
 		};
 
 		enum opcode {
@@ -79,6 +79,10 @@ namespace HulaScript {
 			//other miscellaneous operations
 			LOAD_CONSTANT,
 			DISCARD_TOP,
+			PUSH_SCRATCHPAD,
+			POP_SCRATCHPAD,
+			REVERSE_SCRATCHPAD,
+			DUPLICATE,
 
 			//table operations
 			LOAD_TABLE_ELEM,
@@ -87,6 +91,7 @@ namespace HulaScript {
 			STORE_TABLE_PROP,
 			ALLOCATE_DYN,
 			ALLOCATE_FIXED,
+			ALLOCATE_LITERAL,
 
 			//control flow
 			COND_JUMP_AHEAD,
@@ -119,9 +124,14 @@ namespace HulaScript {
 		uint32_t add_constant(value constant);
 	private:
 		struct table_entry {
-			std::map<uint64_t, uint32_t> hash_to_index;
+			std::map<uint32_t, uint32_t> hash_to_index;
 			uint32_t used_elems;
 
+			size_t table_start;
+			uint32_t allocated_capacity;
+		};
+
+		struct free_table_entry {
 			size_t table_start;
 			uint32_t allocated_capacity;
 		};
@@ -138,6 +148,7 @@ namespace HulaScript {
 		value* table_elems;
 
 		std::vector<value> evaluation_stack;
+		std::vector<value> scratchpad_stack;
 		std::vector<uint32_t> return_stack;
 
 		std::vector<value> constants;
@@ -155,7 +166,7 @@ namespace HulaScript {
 		std::map<uint64_t, table_entry> table_entries;
 		std::queue<uint64_t> available_table_ids;
 		uint64_t max_table_id;
-		std::set<table_entry, bool(*)(table_entry, table_entry)> free_tables;
+		std::set<free_table_entry, bool(*)(free_table_entry, free_table_entry)> free_tables;
 		std::set<char*> active_strs;
 
 		error last_error;

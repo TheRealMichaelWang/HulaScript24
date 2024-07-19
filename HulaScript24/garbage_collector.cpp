@@ -128,6 +128,8 @@ void instance::garbage_collect() {
 
 	for (instance::value eval_value : evaluation_stack)
 		PUSH_TRACE(eval_value);
+	for (instance::value scratch_value : scratchpad_stack)
+		PUSH_TRACE(scratch_value);
 
 #undef PUSH_TRACE
 
@@ -210,8 +212,6 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 	for (int i = 0; i < global_offset; i++)
 		PUSH_TRACE(global_elems[i]);
 
-	for (instance::value eval_value : evaluation_stack)
-		PUSH_TRACE(eval_value);
 #undef PUSH_TRACE
 
 	//mark all used tables
