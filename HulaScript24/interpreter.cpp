@@ -76,6 +76,24 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			evaluation_stack.push_back(make_number(pow(a.data.number, b.data.number)));
 			goto next_ins;
 		}
+		case opcode::NEGATE: {
+			value& back = evaluation_stack.back();
+			if (back.type != value::vtype::NUMBER) {
+				type_error(value::vtype::NUMBER, back.type, ip);
+				goto error_return;
+			}
+			back.data.number = -back.data.number;
+			goto next_ins;
+		}
+		case opcode::NOT: {
+			value& back = evaluation_stack.back();
+			if (back.type != value::vtype::NUMBER) {
+				type_error(value::vtype::NUMBER, back.type, ip);
+				goto error_return;
+			}
+			back.data.number = back.data.number == 0 ? 1 : 0;
+			goto next_ins;
+		}
 
 		//variable operations
 		case opcode::LOAD_LOCAL:
@@ -365,7 +383,11 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			loaded_function_entry& fn_entry = function_entries[fn_val.func_id];
 
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
+				std::stringstream ss;
 
+				ss << "Function expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
+				last_error = error(error::etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
+				goto error_return;
 			}
 
 			ip = fn_entry.start_address;
@@ -377,7 +399,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 
 			ip = return_stack.back();
 			return_stack.pop_back();
-			continue;
+			goto next_ins;
 		}
 
 	next_ins:
