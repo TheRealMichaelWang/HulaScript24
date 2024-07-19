@@ -67,6 +67,20 @@ namespace HulaScript {
 			DIV,
 			MOD,
 			EXP,
+
+			//comparison operators
+			LESS,
+			MORE,
+			LESS_EQUAL,
+			MORE_EQUAL,
+			EQUALS,
+			NOT_EQUALS,
+
+			//logical operators,
+			AND,
+			OR,
+
+			//unary operators
 			NEGATE,
 			NOT,
 
@@ -123,6 +137,7 @@ namespace HulaScript {
 		value make_number(double number);
 		value make_string(const char* str);
 		value make_string(std::string str);
+		value make_bool(bool b);
 
 		uint32_t add_constant(value constant);
 	private:
@@ -155,7 +170,7 @@ namespace HulaScript {
 		std::vector<uint32_t> return_stack;
 
 		std::vector<value> constants;
-		std::map<uint64_t, uint32_t> added_constant_hashes;
+		std::map<uint32_t, uint32_t> added_constant_hashes;
 
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals;
 		size_t table_offset, max_table;

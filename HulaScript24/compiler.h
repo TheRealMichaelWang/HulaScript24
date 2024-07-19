@@ -87,12 +87,12 @@ namespace HulaScript {
 				MORE_EQUAL,
 				EQUALS,
 				NOT_EQUAL,
-				NOT,
-				SET,
 
 				AND,
 				OR,
 
+				NOT,
+				SET,
 				END_OF_SOURCE
 			};
 
