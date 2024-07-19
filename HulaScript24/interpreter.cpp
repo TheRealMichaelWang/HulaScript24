@@ -10,7 +10,6 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 
 	total_instructions.insert(total_instructions.begin(), loaded_functions.begin(), loaded_functions.end());
 	total_instructions.insert(total_instructions.begin() + loaded_functions.size(), new_instructions.begin(), new_instructions.end());
-	evaluation_stack.clear();
 
 	instruction* instructions = total_instructions.data();
 	uint_fast32_t instruction_count = total_instructions.size();
@@ -74,6 +73,58 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			LOAD_OPERAND(b, value::vtype::NUMBER);
 			LOAD_OPERAND(a, value::vtype::NUMBER);
 			evaluation_stack.push_back(make_number(pow(a.data.number, b.data.number)));
+			goto next_ins;
+		}
+		case opcode::LESS: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number < b.data.number));
+			goto next_ins;
+		}
+		case opcode::MORE: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number > b.data.number));
+			goto next_ins;
+		}
+		case opcode::LESS_EQUAL: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number <= b.data.number));
+			goto next_ins;
+		}
+		case opcode::MORE_EQUAL: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number >= b.data.number));
+			goto next_ins;
+		}
+		case opcode::EQUALS: {
+			value b = evaluation_stack.back();
+			evaluation_stack.pop_back();
+			value a = evaluation_stack.back();
+			evaluation_stack.pop_back();
+			evaluation_stack.push_back(make_bool(a.compute_hash() == b.compute_hash()));
+			goto next_ins;
+		}
+		case opcode::NOT_EQUALS: {
+			value b = evaluation_stack.back();
+			evaluation_stack.pop_back();
+			value a = evaluation_stack.back();
+			evaluation_stack.pop_back();
+			evaluation_stack.push_back(make_bool(a.compute_hash() != b.compute_hash()));
+			goto next_ins;
+		}
+		case opcode::AND: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number != 0 && b.data.number != 0));
+			goto next_ins;
+		}
+		case opcode::OR: {
+			LOAD_OPERAND(b, value::vtype::NUMBER);
+			LOAD_OPERAND(a, value::vtype::NUMBER);
+			evaluation_stack.push_back(make_bool(a.data.number != 0 || b.data.number != 0));
 			goto next_ins;
 		}
 		case opcode::NEGATE: {
@@ -400,6 +451,12 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			ip = return_stack.back();
 			return_stack.pop_back();
 			goto next_ins;
+		default: {
+			std::stringstream ss;
+			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
+			last_error = error(error::etype::INTERNAL_ERROR, ss.str(), ip);
+			goto error_return;
+		}
 		}
 
 	next_ins:

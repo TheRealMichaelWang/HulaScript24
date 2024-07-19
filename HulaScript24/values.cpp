@@ -45,6 +45,10 @@ uint32_t instance::add_constant(value constant) {
 	return it->second;
 }
 
+instance::value instance::make_bool(bool b) {
+
+}
+
 uint32_t instance::value::compute_hash() {
 	uint32_t init;
 	switch (type)

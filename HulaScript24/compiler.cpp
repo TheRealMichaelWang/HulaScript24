@@ -80,13 +80,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			instructions.push_back({ .op = instance::opcode::DUPLICATE });
 			instructions.push_back({ .op = instance::opcode::POP_SCRATCHPAD });
 
-			instance::value val = {
-				.type = instance::value::vtype::NUMBER,
-				.data = {
-					.number = i
-				}
-			};
-
+			instance::value val = instance.make_number(i);
 			instructions.push_back({ .op = instance::opcode::STORE_TABLE_PROP, .operand = val.compute_hash() });
 			instructions.push_back({ .op = instance::opcode::DISCARD_TOP });
 		}
@@ -189,12 +183,54 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			break;
 		}
 		default:
-			return;
+			return std::nullopt;
 		}
 	}
 }
 
-
 std::optional<compiler::error> compiler::compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec) {
+	static int min_precs[] = {
+		5, //plus,
+		5, //minus
+		6, //multiply
+		6, //divide
+		6, //modulo
+		7, //exponentiate
 
+		3, //less
+		3, //more
+		3, //less eq
+		3, //more eq
+		3, //eq
+		3, //not eq
+
+		1, //and
+		1 //or
+	};
+
+	static instance::opcode opcodes[] = {
+		instance::opcode::ADD,
+		instance::opcode::SUB,
+		instance::opcode::MUL,
+		instance::opcode::DIV,
+		instance::opcode::MOD,
+		instance::opcode::EXP,
+		instance::opcode::LESS,
+		instance::opcode::LESS_EQUAL,
+		instance::opcode::MORE_EQUAL,
+		instance::opcode::EQUALS,
+		instance::opcode::NOT_EQUALS,
+		
+	};
+
+	UNWRAP(compile_value(tokenizer, instance, instructions)); //lhs
+
+	while (tokenizer.last_token().type >= tokenizer::token_type::PLUS && tokenizer.last_token().type <= tokenizer::token_type::AND && min_precs[tokenizer.last_token().type - tokenizer::token_type::PLUS] > min_prec)
+	{
+		SCAN;
+		UNWRAP(compile_expression(tokenizer, instance, instructions, min_precs[tokenizer.last_token().type - tokenizer::token_type::PLUS]));
+		instructions.push_back({ .op = opcodes[tokenizer.last_token().type - tokenizer::token_type::PLUS] });
+	}
+
+	return std::nullopt;
 }

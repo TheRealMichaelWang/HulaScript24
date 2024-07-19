@@ -3,6 +3,7 @@
 #include <set>
 #include <vector>
 #include <cassert>
+#include "hash.h"
 #include "instance.h"
 
 using namespace HulaScript;
@@ -171,6 +172,13 @@ void instance::garbage_collect() {
 	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
 	{
 		if (!marked_strs.contains(*it)) {
+			uint32_t hash = str_hash(*it);
+			auto it2 = added_constant_hashes.find(hash);
+			if (it2 != added_constant_hashes.end()) {
+				constants.erase(constants.begin() + it2->second);
+				added_constant_hashes.erase(hash);
+			}
+			
 			free(*it);
 			it = active_strs.erase(it);
 		}
@@ -242,6 +250,13 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
 	{
 		if (!marked_strs.contains(*it)) {
+			uint32_t hash = str_hash(*it);
+			auto it2 = added_constant_hashes.find(hash);
+			if (it2 != added_constant_hashes.end()) {
+				constants.erase(constants.begin() + it2->second);
+				added_constant_hashes.erase(hash);
+			}
+
 			free(*it);
 			it = active_strs.erase(it);
 		}
@@ -258,6 +273,8 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 	//compact instructions of used functions only
 	uint32_t current_ip = 0;
 	loaded_functions.clear();
+	evaluation_stack.clear();
+	scratchpad_stack.clear();
 	for (uint32_t id : marked_functions) {
 		auto it = function_entries.find(id);
 
