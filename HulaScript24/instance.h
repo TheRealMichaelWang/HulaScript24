@@ -16,6 +16,7 @@ namespace HulaScript {
 		public:
 			enum etype {
 				UNEXPECTED_TYPE,
+				ARGUMENT_COUNT_MISMATCH,
 				MEMORY,
 				INTERNAL_ERROR,
 				NONE
@@ -66,6 +67,8 @@ namespace HulaScript {
 			DIV,
 			MOD,
 			EXP,
+			NEGATE,
+			NOT,
 
 			//variable load/store
 			LOAD_LOCAL,

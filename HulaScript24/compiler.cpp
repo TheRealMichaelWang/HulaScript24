@@ -29,6 +29,16 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 
 	switch (token.type)
 	{
+	case tokenizer::token_type::MINUS:
+		SCAN;
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		instructions.push_back({ .op = instance::opcode::NEGATE });
+		break;
+	case tokenizer::token_type::NOT:
+		SCAN;
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		instructions.push_back({ .op = instance::opcode::NOT });
+		break;
 	case tokenizer::token_type::NUMBER:
 		instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = instance.add_constant(instance.make_number(token.number())) });
 		SCAN;
@@ -46,7 +56,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			SCAN;
 		}
 		else {
-			UNWRAP(compile_expression(tokenizer, instance, instructions));
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			instructions.push_back({ .op = instance::opcode::ALLOCATE_DYN });
 		}
 		MATCH_AND_SCAN(tokenizer::token_type::OPEN_BRACKET);
@@ -59,7 +69,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			if (length > 0) {
 				MATCH_AND_SCAN(tokenizer::token_type::COMMA);
 			}
-			UNWRAP(compile_expression(tokenizer, instance, instructions));
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			instructions.push_back({ .op = instance::opcode::PUSH_SCRATCHPAD });
 			length++;
 		}
@@ -91,10 +101,10 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 				MATCH_AND_SCAN(tokenizer::token_type::COMMA);
 			}
 			MATCH_AND_SCAN(tokenizer::token_type::OPEN_BRACE);
-			UNWRAP(compile_expression(tokenizer, instance, instructions));
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			instructions.push_back({ .op = instance::opcode::PUSH_SCRATCHPAD });
 			MATCH_AND_SCAN(tokenizer::token_type::COMMA);
-			UNWRAP(compile_expression(tokenizer, instance, instructions));
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			instructions.push_back({ .op = instance::opcode::PUSH_SCRATCHPAD });
 			MATCH_AND_SCAN(tokenizer::token_type::CLOSE_BRACE);
 			length++;
@@ -114,7 +124,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 	}
 	case tokenizer::token_type::OPEN_PAREN:
 		SCAN;
-		UNWRAP(compile_expression(tokenizer, instance, instructions));
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 		MATCH_AND_SCAN(tokenizer::token_type::CLOSE_PAREN);
 		break;
 	default:
@@ -135,7 +145,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 
 			if (tokenizer.match_last(tokenizer::token_type::SET)) {
 				SCAN;
-				UNWRAP(compile_expression(tokenizer, instance, instructions));
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 				instructions.push_back({ .op = instance::opcode::STORE_TABLE_PROP, .operand = hash });
 				return;
 			}
@@ -146,12 +156,12 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 		}
 		case tokenizer::token_type::OPEN_BRACKET: {
 			SCAN;
-			UNWRAP(compile_expression(tokenizer, instance, instructions));
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			MATCH_AND_SCAN(tokenizer::token_type::CLOSE_BRACKET);
 
 			if (tokenizer.match_last(tokenizer::token_type::SET)) {
 				SCAN;
-				UNWRAP(compile_expression(tokenizer, instance, instructions));
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 				instructions.push_back({ .op = instance::opcode::STORE_TABLE_ELEM });
 				return;
 			}
@@ -170,7 +180,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 				if (length > 0) {
 					MATCH_AND_SCAN(tokenizer::token_type::COMMA);
 				}
-				UNWRAP(compile_expression(tokenizer, instance, instructions))
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0))
 			}
 			SCAN;
 
@@ -182,4 +192,9 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			return;
 		}
 	}
+}
+
+
+std::optional<compiler::error> compiler::compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec) {
+
 }

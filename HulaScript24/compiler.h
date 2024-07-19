@@ -166,6 +166,6 @@ namespace HulaScript {
 		};
 
 		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec);
 	};
 }
