@@ -189,6 +189,8 @@ namespace HulaScript {
 		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool expects_statement);
 		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec);
 		std::optional<error> compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_top_level(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_function(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 		std::optional<error> compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool(*stop_cond)(tokenizer::token_type));
 	};
 }
