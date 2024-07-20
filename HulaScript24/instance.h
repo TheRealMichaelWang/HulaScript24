@@ -119,8 +119,8 @@ namespace HulaScript {
 			//function 
 			FUNCTION,
 			FUNCTION_END,
+			FINALIZE_CLOSURE,
 			CHECK_ARGS,
-			MAKE_CLOSURE,
 			CALL,
 			RETURN
 		};
@@ -168,6 +168,7 @@ namespace HulaScript {
 		std::vector<value> evaluation_stack;
 		std::vector<value> scratchpad_stack;
 		std::vector<uint32_t> return_stack;
+		std::vector<uint32_t> extended_offsets;
 
 		std::vector<value> constants;
 		std::map<uint32_t, uint32_t> added_constant_hashes;

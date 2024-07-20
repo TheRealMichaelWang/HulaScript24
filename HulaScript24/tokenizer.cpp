@@ -143,8 +143,6 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 			return last_tok = token(token_type::FUNCTION);
 		case str_hash("array"):
 			return last_tok = token(token_type::TABLE);
-		case str_hash("dict"):
-			return last_tok = token(token_type::DICT);
 		case str_hash("class"):
 			return last_tok = token(token_type::CLASS);
 		case str_hash("if"):
@@ -164,7 +162,9 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		case str_hash("then"):
 			return last_tok = token(token_type::THEN);
 		case str_hash("end"):
-			return last_tok = token(token_type::END);
+			return last_tok = token(token_type::END_BLOCK);
+		case str_hash("global"):
+			return last_tok = token(token_type::GLOBAL);
 		default:
 			return last_tok = token(identifier);
 		}
@@ -265,6 +265,10 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 				return error(error::etype::UNEXPECTED_CHAR, "Expected two bars(||), but got something else.", token_begin);
 			scan_char();
 			return last_tok = token(token_type::OR);
+		case '?':
+			return last_tok = token(token_type::QUESTION);
+		case ':':
+			return last_tok = token(token_type::COLON);
 		case '\0':
 			return last_tok = token(token_type::END_OF_SOURCE);
 		default:
@@ -297,7 +301,7 @@ compiler::error compiler::tokenizer::make_unexpected_tok_err(std::optional< comp
 		"RETURN",
 
 		"THEN",
-		"END",
+		"END_BLOCK",
 
 		"OPEN_PAREN",
 		"CLOSE_PAREN",

@@ -341,10 +341,10 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		case opcode::JUMP_AHEAD:
 			ip += ins.operand;
 			continue;
-		case opcode::COND_JUMP_BACK:
+		case opcode::COND_JUMP_BACK: //used primarily for do..while
 		{
 			LOAD_OPERAND(cond_val, value::vtype::NUMBER);
-			if (cond_val.data.number != 0)
+			if (cond_val.data.number == 0)
 				goto next_ins;
 		}
 		[[fallthrough]];
@@ -387,7 +387,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		case opcode::FUNCTION_END:
 			last_error = error(error::etype::INTERNAL_ERROR, "Function end by itself isn't a valid instruction.", ip);
 			goto error_return;
-		case opcode::MAKE_CLOSURE: 
+		case opcode::FINALIZE_CLOSURE: 
 		{
 			std::optional<uint64_t> alloc_res = allocate_table(ins.operand);
 			if (!alloc_res.has_value())
@@ -416,19 +416,13 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		}
 		case opcode::CALL: 
 		{
-			value fn_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
-
-			if (fn_val.type == value::vtype::CLOSURE) {
-				table_entry& closure_entry = table_entries[fn_val.data.table_id];
-				for (uint_fast32_t i = 0; i < closure_entry.used_elems; i++) {
-					evaluation_stack.push_back(table_elems[closure_entry.table_start + i]);
+			LOAD_OPERAND(fn_val, value::vtype::CLOSURE);
+			evaluation_stack.push_back({
+				.type = value::vtype::TABLE,
+				.data = {
+					.table_id = fn_val.data.table_id
 				}
-			}
-			else if (fn_val.type != value::vtype::FUNC_PTR) {
-				type_error(value::vtype::FUNC_PTR, fn_val.type, ip);
-				goto error_return;
-			}
+			});
 
 			return_stack.push_back(ip);
 			loaded_function_entry& fn_entry = function_entries[fn_val.func_id];
@@ -441,6 +435,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				goto error_return;
 			}
 
+			local_offset += extended_local_offset;
+			extended_offsets.push_back(extended_local_offset);
+			extended_local_offset = 0;
 			ip = fn_entry.start_address;
 			continue;
 		}
@@ -450,6 +447,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 
 			ip = return_stack.back();
 			return_stack.pop_back();
+			extended_local_offset = extended_offsets.back();
+			extended_offsets.pop_back();
+			local_offset -= extended_local_offset;
 			goto next_ins;
 		default: {
 			std::stringstream ss;

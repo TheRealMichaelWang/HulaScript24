@@ -29,9 +29,9 @@ namespace HulaScript {
 				UNEXPECTED_CHAR,
 				UNEXPECTED_EOF,
 				UNEXPECTED_TOKEN,
-				PROPERTY_DOES_NOT_EXIST,
-				INDEX_OUT_OF_RANGE,
-				TYPE_ERROR,
+				UNEXPECTED_VALUE,
+				SYMBOL_NOT_FOUND,
+				CANNOT_SET_CAPTURED,
 			} type;
 
 			error(etype type, source_loc location);
@@ -51,7 +51,6 @@ namespace HulaScript {
 
 				FUNCTION,
 				TABLE,
-				DICT,
 				CLASS,
 
 				IF,
@@ -61,9 +60,10 @@ namespace HulaScript {
 				FOR,
 				DO,
 				RETURN,
+				GLOBAL,
 
 				THEN,
-				END,
+				END_BLOCK,
 
 				OPEN_PAREN,
 				CLOSE_PAREN,
@@ -73,6 +73,8 @@ namespace HulaScript {
 				CLOSE_BRACKET,
 				PERIOD,
 				COMMA,
+				QUESTION,
+				COLON,
 
 				PLUS,
 				MINUS,
@@ -161,11 +163,32 @@ namespace HulaScript {
 
 		struct function_declaration {
 			std::string name;
-
-			std::vector<std::string> params;
+			uint32_t max_locals;
+			std::set<std::string> captured_vars;
+			uint32_t param_count;
 		};
 
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		struct lexical_scope {
+			std::vector<std::string> symbol_names;
+		};
+
+		struct variable_symbol {
+			std::string name;
+			bool is_global;
+			uint32_t local_id;
+			uint32_t func_id;
+		};
+
+		uint32_t max_globals;
+
+		std::map<std::string, class_declaration> class_decls;
+		std::map<std::string, variable_symbol> active_variables;
+		std::vector<lexical_scope> scope_stack;
+		std::vector<function_declaration> func_decl_stack;
+
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool expects_statement);
 		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec);
+		std::optional<error> compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool(*stop_cond)(tokenizer::token_type));
 	};
 }

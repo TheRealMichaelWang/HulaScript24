@@ -5,6 +5,10 @@
 
 using namespace HulaScript;
 
+compiler::compiler() : max_globals(0) {
+	scope_stack.push_back({ });
+}
+
 #define UNWRAP_RES(RESNAME, RES) auto RESNAME = RES; if(std::holds_alternative<error>(RESNAME)) { return std::get<error>(RESNAME); }
 
 #define UNWRAP(RES) { auto opt_res = RES; if(opt_res.has_value()) { return opt_res.value(); }}
@@ -24,19 +28,85 @@ using namespace HulaScript;
 
 #define IF_AND_SCAN(TOK) if(tokenizer.last_tok().type == TOK) { SCAN }
 
-std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions) {
-	tokenizer::token token = tokenizer.last_token();
-
+std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool expects_statement) {
+	tokenizer::token& token = tokenizer.last_token();
+	source_loc& begin_loc = tokenizer.last_token_loc();
 	switch (token.type)
 	{
+	case tokenizer::token_type::IDENTIFIER: {
+		std::string id = tokenizer.last_token().str();
+		SCAN;
+
+		auto local_it = active_variables.find(id);
+		if (local_it != active_variables.end()) {
+			if (tokenizer.match_last(tokenizer::SET)) {
+				SCAN;
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+
+				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+					std::stringstream ss;
+					ss << "Cannot set captured variable " << id << ", which was declared in function " << func_decl_stack[local_it->second.func_id].name << ", not the current function " << func_decl_stack.back().name << '.';
+					return error(error::etype::CANNOT_SET_CAPTURED, ss.str(), begin_loc);
+				}
+				
+				instructions.push_back({ .op = local_it->second.is_global ? instance::opcode::STORE_GLOBAL : instance::opcode::STORE_LOCAL, .operand = local_it->second.local_id });
+				return;
+			}
+			else {
+				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+					function_declaration& current_func = func_decl_stack.back();
+
+					for (int32_t i = func_decl_stack.size() - 1; i > local_it->second.func_id; i--) {
+						auto capture_it = func_decl_stack[i].captured_vars.find(id);
+						if (capture_it == func_decl_stack[i].captured_vars.end()) {
+							func_decl_stack[i].captured_vars.insert(id);
+						}
+					}
+
+					instructions.push_back({ .op = instance::opcode::LOAD_LOCAL, .operand = current_func.param_count }); //load capture table
+					instructions.push_back({ .op = instance::opcode::LOAD_TABLE_PROP, .operand = str_hash(id.c_str()) });
+				}
+				else {
+					instructions.push_back({ .op = local_it->second.is_global ? instance::opcode::LOAD_GLOBAL : instance::opcode::LOAD_LOCAL, .operand = local_it->second.local_id });
+				}
+			}
+		}
+		else {
+			auto class_it = class_decls.find(id);
+			if (class_it != class_decls.end()) {
+
+			}
+			else if (tokenizer.match_last(tokenizer::SET) && expects_statement) { //declare variable here
+				SCAN;
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+
+				scope_stack.back().symbol_names.push_back(id);
+				variable_symbol sym = {
+					.name = id,
+					.is_global = false,
+					.local_id = func_decl_stack.back().max_locals,
+					.func_id = func_decl_stack.size() - 1
+				};
+				active_variables.insert({ id, sym });
+				func_decl_stack.back().max_locals++;
+					
+				instructions.push_back({ .op = instance::opcode::STORE_LOCAL, .operand = sym.local_id });
+			}
+			else {
+				std::stringstream ss;
+				ss << "Symbol " << id << " does not exist.";
+				return error(error::etype::SYMBOL_NOT_FOUND, ss.str(), begin_loc);
+			}
+		}
+	}
 	case tokenizer::token_type::MINUS:
 		SCAN;
-		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		UNWRAP(compile_value(tokenizer, instance, instructions, false));
 		instructions.push_back({ .op = instance::opcode::NEGATE });
 		break;
 	case tokenizer::token_type::NOT:
 		SCAN;
-		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		UNWRAP(compile_value(tokenizer, instance, instructions, false));
 		instructions.push_back({ .op = instance::opcode::NOT });
 		break;
 	case tokenizer::token_type::NUMBER:
@@ -125,6 +195,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 		return tokenizer.make_unexpected_tok_err(std::nullopt);
 	}
 
+	bool is_statement = false;
 	for (;;) {
 		token = tokenizer.last_token();
 		switch (token.type)
@@ -145,6 +216,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			}
 			else {
 				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_PROP, .operand = hash });
+				is_statement = false;
 			}
 			break;
 		}
@@ -161,6 +233,7 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			}
 			else {
 				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_ELEM });
+				is_statement = false;
 			}
 			break;
 		}
@@ -174,15 +247,38 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 				if (length > 0) {
 					MATCH_AND_SCAN(tokenizer::token_type::COMMA);
 				}
-				UNWRAP(compile_expression(tokenizer, instance, instructions, 0))
+				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
 			}
 			SCAN;
 
 			instructions.push_back({ .op = instance::opcode::POP_SCRATCHPAD });
 			instructions.push_back({ .op = instance::opcode::CALL, .operand = length });
+			is_statement = true;
 			break;
 		}
+		case tokenizer::token_type::QUESTION:
+		{
+			SCAN;
+			uint32_t cond_ins_ip = instructions.size();
+			instructions.push_back({ .op = instance::opcode::COND_JUMP_AHEAD });
+
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0)); //if true value
+			uint32_t jump_to_end_ip = instructions.size();
+			instructions.push_back({ .op = instance::opcode::JUMP_AHEAD });
+
+			MATCH_AND_SCAN(tokenizer::token_type::COLON);
+			instructions[cond_ins_ip].operand = instructions.size() - cond_ins_ip;
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0)); //if false value
+			instructions[jump_to_end_ip].operand = instructions.size() - jump_to_end_ip;
+			is_statement = false;
+
+			goto return_immediatley;
+		}
 		default:
+		return_immediatley:
+			if (expects_statement && !is_statement) {
+				return error(error::etype::UNEXPECTED_VALUE, "Expected statement, but got value instead.", begin_loc);
+			}
 			return std::nullopt;
 		}
 	}
@@ -208,29 +304,88 @@ std::optional<compiler::error> compiler::compile_expression(tokenizer& tokenizer
 		1 //or
 	};
 
-	static instance::opcode opcodes[] = {
-		instance::opcode::ADD,
-		instance::opcode::SUB,
-		instance::opcode::MUL,
-		instance::opcode::DIV,
-		instance::opcode::MOD,
-		instance::opcode::EXP,
-		instance::opcode::LESS,
-		instance::opcode::LESS_EQUAL,
-		instance::opcode::MORE_EQUAL,
-		instance::opcode::EQUALS,
-		instance::opcode::NOT_EQUALS,
-		
-	};
-
-	UNWRAP(compile_value(tokenizer, instance, instructions)); //lhs
+	UNWRAP(compile_value(tokenizer, instance, instructions, false)); //lhs
 
 	while (tokenizer.last_token().type >= tokenizer::token_type::PLUS && tokenizer.last_token().type <= tokenizer::token_type::AND && min_precs[tokenizer.last_token().type - tokenizer::token_type::PLUS] > min_prec)
 	{
 		SCAN;
 		UNWRAP(compile_expression(tokenizer, instance, instructions, min_precs[tokenizer.last_token().type - tokenizer::token_type::PLUS]));
-		instructions.push_back({ .op = opcodes[tokenizer.last_token().type - tokenizer::token_type::PLUS] });
+		instructions.push_back({ .op = (instance::opcode)((tokenizer.last_token().type - tokenizer::token_type::PLUS) + instance::opcode::ADD) });
 	}
 
 	return std::nullopt;
+}
+
+std::optional<compiler::error> compiler::compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions) {
+	tokenizer::token& token = tokenizer.last_token();
+	source_loc& begin_loc = tokenizer.last_token_loc();
+
+	switch (token.type)
+	{
+	case tokenizer::token_type::WHILE: {
+		SCAN;
+		uint32_t loop_begin_ip = instructions.size();
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		uint32_t cond_jump_ip = instructions.size();
+		instructions.push_back({ .op = instance::opcode::COND_JUMP_AHEAD });
+		UNWRAP(compile_block(tokenizer, instance, instructions, [](tokenizer::token_type t) -> bool { return t == tokenizer::token_type::END_BLOCK; }));
+		SCAN;
+		instructions.push_back({ .op = instance::opcode::JUMP_BACK, .operand = (uint32_t)(instructions.size() - loop_begin_ip)});
+		instructions[cond_jump_ip].operand = instructions.size() - cond_jump_ip;
+		break;
+	}
+	case tokenizer::token_type::DO: {
+		SCAN;
+		uint32_t loop_begin_ip = instructions.size();
+		UNWRAP(compile_block(tokenizer, instance, instructions, [](tokenizer::token_type t) -> bool { return t == tokenizer::token_type::WHILE; }));
+		SCAN;
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+		instructions.push_back({ .op = instance::opcode::JUMP_BACK, .operand = (uint32_t)(instructions.size() - loop_begin_ip) });
+		break;
+	}
+	case tokenizer::token_type::GLOBAL: {
+		SCAN;
+		MATCH(tokenizer::token_type::IDENTIFIER);
+		std::string id = token.str();
+		SCAN;
+		MATCH_AND_SCAN(tokenizer::token_type::SET);
+
+		UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
+
+		variable_symbol sym = {
+			.name = id,
+			.is_global = true,
+			.local_id = max_globals
+		};
+		active_variables.insert({ id, sym });
+		max_globals++;
+
+		instructions.push_back({ .op = instance::opcode::STORE_GLOBAL, .operand = sym.local_id });
+		return std::nullopt;
+	}
+	default:
+		UNWRAP(compile_value(tokenizer, instance, instructions, true));
+		instructions.push_back({ .op = instance::opcode::DISCARD_TOP });
+		return std::nullopt;
+	}
+}
+
+std::optional<compiler::error> compiler::compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool(*stop_cond)(tokenizer::token_type)) {
+	std::optional<compiler::error> toret = std::nullopt;
+
+	scope_stack.push_back({ }); //push empty lexical scope
+	while (!stop_cond(tokenizer.last_token().type))
+	{
+		toret = compile_statement(tokenizer, instance, instructions);
+		if (toret.has_value())
+			goto unwind_and_return;
+	}
+	
+unwind_and_return:
+	instructions.push_back({ .op = instance::opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
+	for (std::string symbol : scope_stack.back().symbol_names) {
+		active_variables.erase(symbol);
+	}
+	scope_stack.pop_back();
+	return toret;
 }
