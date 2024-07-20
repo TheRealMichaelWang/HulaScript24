@@ -343,6 +343,40 @@ std::optional<compiler::error> compiler::compile_statement(tokenizer& tokenizer,
 		instructions.push_back({ .op = instance::opcode::JUMP_BACK, .operand = (uint32_t)(instructions.size() - loop_begin_ip) });
 		break;
 	}
+	case tokenizer::token_type::IF: {
+		SCAN;
+		uint32_t last_cond_check_ip = 0;
+		std::vector<uint32_t> jump_end_ips;
+		do {
+			if (jump_end_ips.size() > 0) {
+				SCAN;
+				instructions[last_cond_check_ip].operand = (instructions.size() - last_cond_check_ip);
+			}
+
+			UNWRAP(compile_expression(tokenizer, instance, instructions, 0)); //compile condition
+			last_cond_check_ip = instructions.size();
+			instructions.push_back({ .op = instance::opcode::COND_JUMP_AHEAD });
+
+			UNWRAP(compile_block(tokenizer, instance, instructions, [](tokenizer::token_type t) -> bool { return t == tokenizer::token_type::END_BLOCK || t == tokenizer::token_type::ELIF || t == tokenizer::token_type::ELSE; }));
+			jump_end_ips.push_back(instructions.size());
+			instructions.push_back({ .op = instance::opcode::JUMP_AHEAD });
+		} while (tokenizer.match_last(tokenizer::token_type::ELIF));
+
+		if (tokenizer.match_last(tokenizer::token_type::ELSE)) {
+			SCAN;
+			instructions[last_cond_check_ip].operand = (instructions.size() - last_cond_check_ip);
+			UNWRAP(compile_block(tokenizer, instance, instructions, [](tokenizer::token_type t) -> bool { return t == tokenizer::token_type::END_BLOCK; }));
+		}
+		else {
+			SCAN;
+			jump_end_ips.pop_back();
+		}
+
+		for (uint32_t ip : jump_end_ips) {
+			instructions[ip].operand = instructions.size() - ip;
+		}
+		break;
+	}
 	case tokenizer::token_type::GLOBAL: {
 		SCAN;
 		MATCH(tokenizer::token_type::IDENTIFIER);
