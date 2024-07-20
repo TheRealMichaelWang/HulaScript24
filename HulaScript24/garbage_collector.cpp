@@ -222,6 +222,11 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 
 #undef PUSH_TRACE
 
+	//clear temporary stacks
+	loaded_functions.clear();
+	evaluation_stack.clear();
+	scratchpad_stack.clear();
+
 	//mark all used tables
 	std::set<uint64_t> marked_tables;
 	while (!tables_to_mark.empty())
@@ -272,9 +277,6 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 
 	//compact instructions of used functions only
 	uint32_t current_ip = 0;
-	loaded_functions.clear();
-	evaluation_stack.clear();
-	scratchpad_stack.clear();
 	for (uint32_t id : marked_functions) {
 		auto it = function_entries.find(id);
 
