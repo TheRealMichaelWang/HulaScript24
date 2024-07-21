@@ -54,20 +54,16 @@ instance::value instance::make_bool(bool b) {
 	};
 }
 
-uint32_t instance::value::compute_hash() {
-	uint32_t init;
+uint64_t instance::value::compute_hash() {
 	switch (type)
 	{
 	case HulaScript::instance::value::CLOSURE:
 		[[fallthrough]];
 	case HulaScript::instance::value::TABLE:
-		init = data.table_id + 1;
-		break;
-	case HulaScript::instance::value::FUNC_PTR:
-		init = func_id + 1;
-		break;
+		return data.table_id + 1;
 	case HulaScript::instance::value::STRING:
 		return str_hash(data.str);
+		break;
 	case HulaScript::instance::value::NUMBER:
 		return data.table_id + 1;
 	case HulaScript::instance::value::NIL:

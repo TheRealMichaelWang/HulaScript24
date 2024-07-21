@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-static uint32_t constexpr str_hash(char const* input) {
+static uint64_t constexpr str_hash(char const* input) {
     return *input ?
-        static_cast<uint32_t>(*input) + 33 * str_hash(input + 1) :
+        static_cast<uint64_t>(*input) + 33 * str_hash(input + 1) :
         5381;
 }
