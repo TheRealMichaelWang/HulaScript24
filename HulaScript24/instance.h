@@ -122,7 +122,10 @@ namespace HulaScript {
 			FINALIZE_CLOSURE,
 			CHECK_ARGS,
 			CALL,
-			RETURN
+			RETURN,
+
+			//invalid
+			INVALID
 		};
 
 		struct instruction {

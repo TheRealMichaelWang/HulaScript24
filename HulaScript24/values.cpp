@@ -46,7 +46,12 @@ uint32_t instance::add_constant(value constant) {
 }
 
 instance::value instance::make_bool(bool b) {
-
+	return {
+		.type = value::vtype::NUMBER,
+		.data = {
+			.number = b ? 1.0 : 0.0
+		}
+	};
 }
 
 uint32_t instance::value::compute_hash() {

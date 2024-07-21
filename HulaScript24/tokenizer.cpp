@@ -159,6 +159,10 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 			return last_tok = token(token_type::DO);
 		case str_hash("return"):
 			return last_tok = token(token_type::RETURN);
+		case str_hash("break"):
+			return last_tok = token(token_type::LOOP_BREAK);
+		case str_hash("continue"):
+			return last_tok = token(token_type::LOOP_CONTINUE);
 		case str_hash("then"):
 			return last_tok = token(token_type::THEN);
 		case str_hash("end"):

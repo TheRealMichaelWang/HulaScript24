@@ -389,28 +389,13 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			goto error_return;
 		case opcode::FINALIZE_CLOSURE: 
 		{
-			std::optional<uint64_t> alloc_res = allocate_table(ins.operand);
-			if (!alloc_res.has_value())
-			{
-				std::stringstream ss;
-				ss << "Unable to make closure, failed to allocate capture table with " << ins.operand << " elements.";
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
-				goto error_return;
-			}
-			table_entry table_entry = table_entries[alloc_res.value()];
-
-			for (uint_fast32_t i = 0; i < ins.operand; i++) {
-				table_elems[table_entry.table_start + i] = evaluation_stack.back();
-				table_entry.used_elems++;
-				evaluation_stack.pop_back();
-			}
-
+			LOAD_OPERAND(capture_table, value::vtype::TABLE);
 			LOAD_OPERAND(func_ptr_val, value::vtype::FUNC_PTR);
 
 			evaluation_stack.push_back({
 				.type = value::vtype::CLOSURE,
 				.func_id = func_ptr_val.func_id,
-				.data = {.table_id = alloc_res.value() }
+				.data = {.table_id = capture_table.data.table_id }
 			});
 			goto next_ins;
 		}
@@ -451,6 +436,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			extended_offsets.pop_back();
 			local_offset -= extended_local_offset;
 			goto next_ins;
+		case opcode::INVALID:
+			last_error = error(error::etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
+			goto error_return;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";

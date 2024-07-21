@@ -30,7 +30,9 @@ namespace HulaScript {
 				UNEXPECTED_EOF,
 				UNEXPECTED_TOKEN,
 				UNEXPECTED_VALUE,
+				UNEXPECTED_STATEMENT,
 				SYMBOL_NOT_FOUND,
+				SYMBOL_ALREADY_EXISTS,
 				CANNOT_SET_CAPTURED,
 			} type;
 
@@ -60,6 +62,8 @@ namespace HulaScript {
 				FOR,
 				DO,
 				RETURN,
+				LOOP_BREAK,
+				LOOP_CONTINUE,
 				GLOBAL,
 
 				THEN,
@@ -165,11 +169,15 @@ namespace HulaScript {
 			std::string name;
 			uint32_t max_locals;
 			std::set<std::string> captured_vars;
-			uint32_t param_count;
 		};
 
 		struct lexical_scope {
 			std::vector<std::string> symbol_names;
+		};
+
+		struct loop_scope {
+			std::vector<uint32_t> break_requests;
+			std::vector<uint32_t> continue_requests;
 		};
 
 		struct variable_symbol {
@@ -185,12 +193,16 @@ namespace HulaScript {
 		std::map<std::string, variable_symbol> active_variables;
 		std::vector<lexical_scope> scope_stack;
 		std::vector<function_declaration> func_decl_stack;
+		std::vector<loop_scope> loop_stack;
 
 		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool expects_statement);
 		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec);
 		std::optional<error> compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 		std::optional<error> compile_top_level(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::optional<error> compile_function(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
+		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
 		std::optional<error> compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool(*stop_cond)(tokenizer::token_type));
+
+		void unwind_locals(std::vector<instance::instruction>& instructions);
+		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instance::instruction>& instructions);
 	};
 }
