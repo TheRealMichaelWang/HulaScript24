@@ -56,7 +56,7 @@ namespace HulaScript {
 				return type == vtype::FUNC_PTR || type == vtype::CLOSURE;
 			}
 
-			uint32_t compute_hash();
+			uint64_t compute_hash();
 		};
 
 		enum opcode {
@@ -104,8 +104,6 @@ namespace HulaScript {
 			//table operations
 			LOAD_TABLE_ELEM,
 			STORE_TABLE_ELEM,
-			LOAD_TABLE_PROP,
-			STORE_TABLE_PROP,
 			ALLOCATE_DYN,
 			ALLOCATE_FIXED,
 			ALLOCATE_LITERAL,
@@ -145,7 +143,7 @@ namespace HulaScript {
 		uint32_t add_constant(value constant);
 	private:
 		struct table_entry {
-			std::map<uint32_t, uint32_t> hash_to_index;
+			std::map<uint64_t, uint32_t> hash_to_index;
 			uint32_t used_elems;
 
 			size_t table_start;
@@ -174,7 +172,7 @@ namespace HulaScript {
 		std::vector<uint32_t> extended_offsets;
 
 		std::vector<value> constants;
-		std::map<uint32_t, uint32_t> added_constant_hashes;
+		std::map<uint64_t, uint32_t> added_constant_hashes;
 
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals;
 		size_t table_offset, max_table;

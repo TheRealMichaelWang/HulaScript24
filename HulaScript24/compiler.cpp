@@ -77,7 +77,8 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 					}
 
 					instructions.push_back({ .op = instance::opcode::LOAD_LOCAL, .operand = 0 }); //load capture table, which is always local variable 0 in functions
-					instructions.push_back({ .op = instance::opcode::LOAD_TABLE_PROP, .operand = str_hash(id.c_str()) });
+					instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = instance.add_constant(instance.make_string(id)) });
+					instructions.push_back({ .op = instance::opcode::LOAD_TABLE_ELEM });
 				}
 				else {
 					instructions.push_back({ .op = local_it->second.is_global ? instance::opcode::LOAD_GLOBAL : instance::opcode::LOAD_LOCAL, .operand = local_it->second.local_id });
@@ -166,7 +167,8 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 			instructions.push_back({ .op = instance::opcode::POP_SCRATCHPAD });
 
 			instance::value val = instance.make_number(i);
-			instructions.push_back({ .op = instance::opcode::STORE_TABLE_PROP, .operand = val.compute_hash() });
+			instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = instance.add_constant(val) });
+			instructions.push_back({ .op = instance::opcode::STORE_TABLE_ELEM });
 			instructions.push_back({ .op = instance::opcode::DISCARD_TOP });
 		}
 		break;
@@ -226,18 +228,17 @@ std::optional<compiler::error> compiler::compile_value(compiler::tokenizer& toke
 		{
 			SCAN;
 			MATCH(tokenizer::token_type::IDENTIFIER);
-			std::string identifier = tokenizer.last_token().str();
-			uint32_t hash = str_hash(identifier.c_str());
+			instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = instance.add_constant(instance.make_string(tokenizer.last_token().str())) });
 			SCAN;
 
 			if (tokenizer.match_last(tokenizer::token_type::SET)) {
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, instance, instructions, 0));
-				instructions.push_back({ .op = instance::opcode::STORE_TABLE_PROP, .operand = hash });
+				instructions.push_back({ .op = instance::opcode::STORE_TABLE_ELEM });
 				return std::nullopt;
 			}
 			else {
-				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_PROP, .operand = hash });
+				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_ELEM });
 				is_statement = false;
 			}
 			break;
@@ -516,15 +517,18 @@ std::optional<compiler::error> compiler::compile_function(std::string name, toke
 			instructions.push_back({ .op = instance::opcode::DUPLICATE });
 			
 			auto var_it = active_variables.find(captured_var);
+			uint32_t prop_str_id = instance.add_constant(instance.make_string(captured_var));
 			if (var_it->second.func_id < func_decl_stack.size() - 1) { //this is a captured 
 				instructions.push_back({ .op = instance::opcode::LOAD_LOCAL, .operand = 0 }); //load capture table
-				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_PROP, .operand = str_hash(captured_var.c_str()) });
+				instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = prop_str_id});
+				instructions.push_back({ .op = instance::opcode::LOAD_TABLE_ELEM });
 			}
 			else { //load local 
 				instructions.push_back({ .op = instance::opcode::LOAD_LOCAL, .operand = var_it->second.local_id });
 			}
 
-			instructions.push_back({ .op = instance::opcode::STORE_TABLE_PROP, .operand = str_hash(captured_var.c_str()) });
+			instructions.push_back({ .op = instance::opcode::LOAD_CONSTANT, .operand = prop_str_id });
+			instructions.push_back({ .op = instance::opcode::STORE_TABLE_ELEM });
 			instructions.push_back({ .op = instance::opcode::DISCARD_TOP });
 		}
 

@@ -207,23 +207,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			LOAD_OPERAND(table_val, value::vtype::TABLE);
 
 			table_entry& table_entry = table_entries[table_val.data.table_id];
-			uint32_t hash = key_val.compute_hash();
+			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
-			if (it == table_entry.hash_to_index.end()) {
-				evaluation_stack.push_back(make_nil());
-			}
-			else {
-				evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
-			}
-			goto next_ins;
-		}
-		case opcode::LOAD_TABLE_PROP: {
-			LOAD_OPERAND(table_val, value::vtype::TABLE);
-
-			table_entry& table_entry = table_entries[table_val.data.table_id];
-
-			auto it = table_entry.hash_to_index.find(ins.operand);
 			if (it == table_entry.hash_to_index.end()) {
 				evaluation_stack.push_back(make_nil());
 			}
@@ -240,7 +226,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			LOAD_OPERAND(table_val, value::vtype::TABLE);
 
 			table_entry& table_entry = table_entries[table_val.data.table_id];
-			uint32_t hash = key_val.compute_hash();
+			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
 			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
@@ -253,34 +239,6 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				}
 
 				table_entry.hash_to_index.insert({ hash, table_entry.used_elems });
-				table_elems[table_entry.table_start + table_entry.used_elems] = store_val;
-				table_entry.used_elems++;
-			}
-			else { //write to existing value
-				table_elems[table_entry.table_start + it->second] = store_val;
-			}
-
-			evaluation_stack.push_back(store_val);
-			goto next_ins;
-		}
-		case opcode::STORE_TABLE_PROP: {
-			value store_val = evaluation_stack.back();
-			evaluation_stack.pop_back();
-			LOAD_OPERAND(table_val, value::vtype::TABLE);
-
-			table_entry& table_entry = table_entries[table_val.data.table_id];
-
-			auto it = table_entry.hash_to_index.find(ins.operand);
-			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
-				if (table_entry.used_elems == table_entry.allocated_capacity) {
-					if (!reallocate_table(table_val.data.table_id, 4, 1))
-					{
-						last_error = error(error::etype::MEMORY, "Failed to add to table.", ip);
-						goto error_return;
-					}
-				}
-
-				table_entry.hash_to_index.insert({ ins.operand, table_entry.used_elems });
 				table_elems[table_entry.table_start + table_entry.used_elems] = store_val;
 				table_entry.used_elems++;
 			}

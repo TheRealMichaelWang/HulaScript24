@@ -172,7 +172,7 @@ void instance::garbage_collect() {
 	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
 	{
 		if (!marked_strs.contains(*it)) {
-			uint32_t hash = str_hash(*it);
+			uint64_t hash = str_hash(*it);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
 				constants.erase(constants.begin() + it2->second);
@@ -255,7 +255,7 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
 	{
 		if (!marked_strs.contains(*it)) {
-			uint32_t hash = str_hash(*it);
+			uint64_t hash = str_hash(*it);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
 				constants.erase(constants.begin() + it2->second);
