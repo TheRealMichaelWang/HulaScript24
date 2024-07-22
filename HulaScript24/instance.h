@@ -32,9 +32,8 @@ namespace HulaScript {
 
 		struct value {
 			enum vtype {
-				CLOSURE = 5,
-				TABLE = 4,
-				FUNC_PTR = 3,
+				CLOSURE = 4,
+				TABLE = 3,
 				STRING = 2,
 				NUMBER = 1,
 				NIL = 0
@@ -50,10 +49,6 @@ namespace HulaScript {
 
 			const bool is_gc_type() {
 				return type >= vtype::TABLE;
-			}
-
-			const bool is_func_type() {
-				return type == vtype::FUNC_PTR || type == vtype::CLOSURE;
 			}
 
 			uint64_t compute_hash();
@@ -95,6 +90,7 @@ namespace HulaScript {
 
 			//other miscellaneous operations
 			LOAD_CONSTANT,
+			PUSH_NIL,
 			DISCARD_TOP,
 			PUSH_SCRATCHPAD,
 			POP_SCRATCHPAD,
@@ -117,7 +113,7 @@ namespace HulaScript {
 			//function 
 			FUNCTION,
 			FUNCTION_END,
-			FINALIZE_CLOSURE,
+			MAKE_CLOSURE,
 			CHECK_ARGS,
 			CALL,
 			RETURN,
@@ -141,6 +137,8 @@ namespace HulaScript {
 		value make_bool(bool b);
 
 		uint32_t add_constant(value constant);
+
+		uint32_t emit_function_start(std::vector<instruction>& instructions);
 	private:
 		struct table_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;
@@ -156,10 +154,12 @@ namespace HulaScript {
 		};
 
 		struct loaded_function_entry {
-			uint32_t start_address;
-			uint32_t length;
+			uint32_t start_address = 0;
+			std::set<uint32_t> referenced_func_ids;
+			std::set<char*> referenced_const_strs;
+			uint32_t length = 0;
 
-			uint32_t parameter_count;
+			uint32_t parameter_count = 0;
 		};
 
 		value* local_elems;

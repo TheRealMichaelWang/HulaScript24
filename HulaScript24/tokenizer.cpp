@@ -139,6 +139,12 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 
 		switch (hash)
 		{
+		case str_hash("true"):
+			return last_tok = token(token_type::TRUE);
+		case str_hash("false"):
+			return last_tok = token(token_type::FALSE);
+		case str_hash("nil"):
+			return last_tok = token(token_type::NIL);
 		case str_hash("function"):
 			return last_tok = token(token_type::FUNCTION);
 		case str_hash("array"):

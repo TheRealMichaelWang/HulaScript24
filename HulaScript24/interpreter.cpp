@@ -28,9 +28,6 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 															index_error(NUMERICAL_IND.data.number, index, LENGTH, ip);\
 															goto error_return;\
 														}\
-															
-	std::vector<uint32_t> loaded_functions;
-
 	
 	while (ip != instruction_count)
 	{
@@ -181,6 +178,9 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		case opcode::LOAD_CONSTANT:
 			evaluation_stack.push_back(constants[ins.operand]);
 			goto next_ins;
+		case opcode::PUSH_NIL:
+			evaluation_stack.push_back(make_nil());
+			goto next_ins;
 		case opcode::DISCARD_TOP:
 			evaluation_stack.pop_back();
 			goto next_ins;
@@ -313,46 +313,55 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 		//function operations
 		case opcode::FUNCTION:
 		{
-			uint32_t id;
-			if (available_function_ids.empty())
-				id = max_function_id++;
-			else {
-				id = available_function_ids.front();
-				available_function_ids.pop();
-			}
+			uint32_t id = ins.operand;
+			uint32_t end_addr = ip;
 
 			loaded_function_entry entry = {
 				.start_address = ip + 1,
-				.length = ins.operand
 			};
-			ip = entry.start_address + entry.length;
+			do {
+				switch (instructions[end_addr].op)
+				{
+				case opcode::MAKE_CLOSURE:
+					entry.referenced_func_ids.insert(instructions[end_addr].operand);
+					break;
+				case opcode::LOAD_CONSTANT: {
+					value& constant = constants[instructions[end_addr].operand];
+					if (constant.type == value::vtype::CLOSURE)
+						entry.referenced_const_strs.insert(constant.data.str);
+					break;
+				}
+				}
+
+				end_addr++;
+				if (instruction_count == end_addr) {
+					std::stringstream ss;
+					ss << "No matching function end instruction for function instruction at " << ip << '.';
+					last_error = error(error::etype::INTERNAL_ERROR, ss.str(), end_addr);
+				}
+			} while (instructions[end_addr].operand != opcode::FUNCTION_END);
+
+			entry.length = end_addr - ip;
+			ip = end_addr;
 
 			instruction end_ins = instructions[ip];
-			assert(end_ins.operand == opcode::FUNCTION_END);
-
 			entry.parameter_count = end_ins.operand;
-			function_entries.insert({ id, entry });
-			loaded_functions.push_back(id);
 
-			evaluation_stack.push_back({
-				.type = value::vtype::FUNC_PTR,
-				.func_id = id
-			});
+			function_entries.insert({ id, entry });
 
 			ip++;
 			continue;
 		}
-		case opcode::FUNCTION_END:
-			last_error = error(error::etype::INTERNAL_ERROR, "Function end by itself isn't a valid instruction.", ip);
-			goto error_return;
-		case opcode::FINALIZE_CLOSURE: 
+		case opcode::FUNCTION_END: //automatically return if this instruction is ever reached
+			evaluation_stack.push_back(make_nil());
+			goto return_function;
+		case opcode::MAKE_CLOSURE: 
 		{
 			LOAD_OPERAND(capture_table, value::vtype::TABLE);
-			LOAD_OPERAND(func_ptr_val, value::vtype::FUNC_PTR);
 
 			evaluation_stack.push_back({
 				.type = value::vtype::CLOSURE,
-				.func_id = func_ptr_val.func_id,
+				.func_id = ins.operand,
 				.data = {.table_id = capture_table.data.table_id }
 			});
 			goto next_ins;
@@ -385,6 +394,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			continue;
 		}
 		case opcode::RETURN:
+		return_function:
 			if (return_stack.empty())
 				goto value_return;
 
@@ -422,4 +432,16 @@ value_return:
 	return evaluation_stack.back();
 #undef LOAD_OPERAND
 #undef NORMALIZE_ARRAY_INDEX
+}
+
+uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
+	uint32_t id;
+	if (available_function_ids.empty())
+		id = max_function_id++;
+	else {
+		id = available_function_ids.front();
+		available_function_ids.pop();
+	}
+	instructions.push_back({ .op = opcode::FUNCTION, .operand = id });
+	return id;
 }
