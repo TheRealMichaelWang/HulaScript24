@@ -51,6 +51,10 @@ namespace HulaScript {
 				NUMBER,
 				STRING_LITERAL,
 
+				TRUE,
+				FALSE,
+				NIL,
+
 				FUNCTION,
 				TABLE,
 				CLASS,
@@ -195,14 +199,16 @@ namespace HulaScript {
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
 
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool expects_statement);
-		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, int min_prec);
-		std::optional<error> compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::optional<error> compile_top_level(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions);
-		std::optional<error> compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& instructions, bool(*stop_cond)(tokenizer::token_type));
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section, bool expects_statement);
+		std::optional<error> compile_expression(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section, int min_prec);
+		std::optional<error> compile_statement(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section);
+		std::optional<error> compile_top_level(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& repl_section, std::vector<instance::instruction>& function_section);
+		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section);
+		std::optional<error> compile_block(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& current_function_section, std::vector<instance::instruction>& function_section, bool(*stop_cond)(tokenizer::token_type));
 
-		void unwind_locals(std::vector<instance::instruction>& instructions);
+		void unwind_locals(std::vector<instance::instruction>& instructions, bool use_unwind_ins);
 		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instance::instruction>& instructions);
+
+		std::optional<error> validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc);
 	};
 }

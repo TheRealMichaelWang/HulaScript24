@@ -117,10 +117,12 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uin
 
 void instance::garbage_collect() {
 #define PUSH_TRACE(TO_TRACE) { if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.data.table_id); }\
-								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); } }
+								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); } \
+								if(TO_TRACE.type == value::vtype::CLOSURE) { marked_functions.insert(TO_TRACE.func_id); } }
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
+	std::set<uint32_t> marked_functions;
 
 	for (int i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
@@ -157,6 +159,25 @@ void instance::garbage_collect() {
 			}
 			else if (val.type == value::vtype::STRING) {
 				marked_strs.insert(val.data.str);
+			}
+			if (val.type == value::vtype::CLOSURE) {
+				std::queue<uint32_t> functions_to_mark;
+				functions_to_mark.push(val.func_id);
+				while (!functions_to_mark.empty()) {
+					uint32_t id = functions_to_mark.front();
+					functions_to_mark.pop();
+
+					if (marked_functions.contains(id)) {
+						continue;
+					}
+					marked_functions.insert(id);
+					for (char* refed_str : function_entries[id].referenced_const_strs) {
+						marked_strs.insert(refed_str);
+					}
+					for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
+						functions_to_mark.push(refed_function);
+					}
+				}
 			}
 		}
 	}
@@ -213,7 +234,7 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 
 #define PUSH_TRACE(TO_TRACE) { if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.data.table_id); }\
 								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); }\
-								if(TO_TRACE.is_func_type()) { marked_functions.insert(TO_TRACE.func_id); } }
+								if(TO_TRACE.type == value::vtype::CLOSURE) { marked_functions.insert(TO_TRACE.func_id); } }
 
 	for (int i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
@@ -245,8 +266,24 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 			else if (val.type == value::vtype::STRING) {
 				marked_strs.insert(val.data.str);
 			}
-			if (val.is_func_type()) {
-				marked_functions.insert(val.func_id);
+			if (val.type == value::vtype::CLOSURE) {
+				std::queue<uint32_t> functions_to_mark;
+				functions_to_mark.push(val.func_id);
+				while (!functions_to_mark.empty()) {
+					uint32_t id = functions_to_mark.front();
+					functions_to_mark.pop();
+
+					if (marked_functions.contains(id)) {
+						continue;
+					}
+					marked_functions.insert(id);
+					for (char* refed_str : function_entries[id].referenced_const_strs) {
+						marked_strs.insert(refed_str);
+					}
+					for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
+						functions_to_mark.push(refed_function);
+					}
+				}
 			}
 		}
 	}
