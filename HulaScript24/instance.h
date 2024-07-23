@@ -8,6 +8,7 @@
 #include <array>
 #include <string>
 #include <optional>
+#include "compiler.h"
 
 namespace HulaScript {
 	class instance {
@@ -18,13 +19,11 @@ namespace HulaScript {
 				UNEXPECTED_TYPE,
 				ARGUMENT_COUNT_MISMATCH,
 				MEMORY,
-				INTERNAL_ERROR,
-				NONE
+				INTERNAL_ERROR
 			} type;
 
 			error(error::etype type, std::string message, uint32_t ip);
 			error(error::etype type, uint32_t ip);
-			error();
 		private:
 			std::optional<std::string> msg;
 			uint32_t ip;
@@ -130,6 +129,8 @@ namespace HulaScript {
 		instance(uint32_t, uint32_t, size_t);
 		~instance();
 
+		std::variant<value, error, compiler::error> run(std::string code, std::optional<std::string> source);
+
 		value make_nil();
 		value make_number(double number);
 		value make_string(const char* str);
@@ -139,6 +140,10 @@ namespace HulaScript {
 		uint32_t add_constant(value constant);
 
 		uint32_t emit_function_start(std::vector<instruction>& instructions);
+
+		void recycle_function_id(uint32_t func_id) {
+			available_function_ids.push(func_id);
+		}
 	private:
 		struct table_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;
@@ -162,6 +167,8 @@ namespace HulaScript {
 			uint32_t parameter_count = 0;
 		};
 
+		compiler my_compiler;
+
 		value* local_elems;
 		value* global_elems;
 		value* table_elems;
@@ -178,7 +185,7 @@ namespace HulaScript {
 		size_t table_offset, max_table;
 
 		std::map<uint64_t, uint32_t> id_global_map;
-		std::vector<instruction> loaded_functions;
+		std::vector<instruction> function_section;
 		std::map<uint32_t, loaded_function_entry> function_entries;
 		std::queue<uint32_t> available_function_ids;
 		uint32_t max_function_id;
@@ -189,8 +196,7 @@ namespace HulaScript {
 		std::set<free_table_entry, bool(*)(free_table_entry, free_table_entry)> free_tables;
 		std::set<char*> active_strs;
 
-		error last_error;
-		std::optional<value> execute(const std::vector<instruction>& new_instructions);
+		std::variant<value, error> execute(const uint32_t start_ip, const std::vector<instruction>& new_instructions);
 
 		error type_error(value::vtype expected, value::vtype got, uint32_t ip);
 		error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);

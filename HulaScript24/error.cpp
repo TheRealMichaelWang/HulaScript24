@@ -1,6 +1,5 @@
 #include <sstream>
 #include "instance.h"
-#include "compiler.h"
 
 using namespace HulaScript;
 
@@ -11,11 +10,6 @@ instance::error::error(etype type, std::string msg, uint32_t ip) :
 
 instance::error::error(etype type, uint32_t ip) :
 	type(type), msg(std::nullopt), ip(ip) {
-
-}
-
-instance::error::error() :
-	type(etype::NONE), msg(std::nullopt), ip(0) {
 
 }
 
@@ -33,8 +27,7 @@ instance::error instance::type_error(value::vtype expected, value::vtype got, ui
 	std::stringstream ss;
 	ss << "Expected type " << type_names[expected] << " but got " << type_names[got] << " instead.";
 
-	last_error = error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
-	return last_error;
+	return error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
 }
 
 instance::error instance::index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip) {
@@ -45,14 +38,5 @@ instance::error instance::index_error(double number_index, uint32_t index, uint3
 		ss << " Index was rounded and transformed into " << index << ".";
 	}
 
-	last_error = error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
-	return last_error;
-}
-
-compiler::error::error(etype type, source_loc location) : type(type), location(location), msg(std::nullopt) {
-
-}
-
-compiler::error::error(etype type, std::string message, source_loc location) : type(type), location(location), msg(msg) {
-
+	return error(error::etype::UNEXPECTED_TYPE, ss.str(), ip);
 }

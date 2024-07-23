@@ -64,9 +64,6 @@ uint64_t instance::value::compute_hash() {
 	case HulaScript::instance::value::TABLE:
 		init_hash = data.table_id;
 		break;
-	case HulaScript::instance::value::FUNC_PTR:
-		init_hash = func_id;
-		break;
 	case HulaScript::instance::value::STRING:
 		init_hash = str_hash(data.str);
 		break;

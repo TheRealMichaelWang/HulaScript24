@@ -5,16 +5,16 @@
 
 using namespace HulaScript;
 
-std::optional<instance::value> instance::execute(const std::vector<instruction>& new_instructions) {
-	std::vector<instruction> total_instructions(loaded_functions.size() + new_instructions.size());
+std::variant<instance::value, instance::error> instance::execute(const uint32_t start_ip, const std::vector<instruction>& new_instructions) {
+	std::vector<instruction> total_instructions(function_section.size() + new_instructions.size());
 
-	total_instructions.insert(total_instructions.begin(), loaded_functions.begin(), loaded_functions.end());
-	total_instructions.insert(total_instructions.begin() + loaded_functions.size(), new_instructions.begin(), new_instructions.end());
+	total_instructions.insert(total_instructions.begin(), function_section.begin(), function_section.end());
+	total_instructions.insert(total_instructions.begin() + function_section.size(), new_instructions.begin(), new_instructions.end());
 
 	instruction* instructions = total_instructions.data();
 	uint_fast32_t instruction_count = total_instructions.size();
 
-	uint_fast32_t ip = loaded_functions.size();
+	uint_fast32_t ip = start_ip;
 
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
@@ -29,6 +29,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 															goto error_return;\
 														}\
 	
+	std::optional<error> current_error = std::nullopt;
 	while (ip != instruction_count)
 	{
 		instruction& ins = instructions[ip];
@@ -233,7 +234,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				if (table_entry.used_elems == table_entry.allocated_capacity) {
 					if (!reallocate_table(table_val.data.table_id, 4, 1))
 					{
-						last_error = error(error::etype::MEMORY, "Failed to add to table.", ip);
+						current_error = error(error::etype::MEMORY, "Failed to add to table.", ip);
 						goto error_return;
 					}
 				}
@@ -262,7 +263,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
+				current_error = error(error::etype::MEMORY, ss.str(), ip);
 				goto error_return;
 			}
 
@@ -278,7 +279,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				last_error = error(error::etype::MEMORY, ss.str(), ip);
+				current_error = error(error::etype::MEMORY, ss.str(), ip);
 				goto error_return;
 			}
 			evaluation_stack.push_back({
@@ -337,7 +338,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				if (instruction_count == end_addr) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					last_error = error(error::etype::INTERNAL_ERROR, ss.str(), end_addr);
+					current_error = error(error::etype::INTERNAL_ERROR, ss.str(), end_addr);
 				}
 			} while (instructions[end_addr].operand != opcode::FUNCTION_END);
 
@@ -383,7 +384,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 				std::stringstream ss;
 
 				ss << "Function expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				last_error = error(error::etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
+				current_error = error(error::etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
 				goto error_return;
 			}
 
@@ -405,12 +406,12 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			last_error = error(error::etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
+			current_error = error(error::etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
 			goto error_return;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			last_error = error(error::etype::INTERNAL_ERROR, ss.str(), ip);
+			current_error = error(error::etype::INTERNAL_ERROR, ss.str(), ip);
 			goto error_return;
 		}
 		}
@@ -425,7 +426,7 @@ std::optional<instance::value> instance::execute(const std::vector<instruction>&
 	
 error_return:
 	finalize_collect(total_instructions);
-	return std::nullopt;
+	return current_error.value();
 value_return:
 	finalize_collect(total_instructions);
 	assert(evaluation_stack.size() == 1);
@@ -444,4 +445,25 @@ uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 	}
 	instructions.push_back({ .op = opcode::FUNCTION, .operand = id });
 	return id;
+}
+
+
+std::variant<instance::value, instance::error, compiler::error> instance::run(std::string code, std::optional<std::string> source) {
+	compiler::tokenizer tokenizer(code, source);
+
+	uint32_t current_function_size = function_section.size();
+	std::vector<instruction> repl_section;
+
+	auto compile_result = my_compiler.compile(tokenizer, *this, repl_section, function_section, false);
+	if (compile_result.has_value()) {
+		function_section.erase(function_section.begin() + current_function_size, function_section.end());
+		return compile_result.value();
+	}
+
+	auto run_result = execute(current_function_size, repl_section);
+	if (std::holds_alternative<error>(run_result)) {
+		return std::get<error>(run_result);
+	}
+
+	return std::get<value>(run_result);
 }

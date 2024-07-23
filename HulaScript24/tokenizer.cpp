@@ -58,7 +58,7 @@ char compiler::tokenizer::scan_char() {
 std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 #define NEXT_HEX(NAME) char CHAR_##NAME = last_char;\
 							scan_char();\
-							int NAME;\
+							uint8_t NAME;\
 							if(CHAR_##NAME >= '0' && CHAR_##NAME <= '9') {\
 								NAME = (int)(CHAR_##NAME - '0');\
 							} else if(CHAR_##NAME >= 'a' && CHAR_##NAME <= 'f') {\
@@ -95,7 +95,7 @@ std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 			scan_char();
 			NEXT_HEX(hex_a);
 			NEXT_HEX(hex_b);
-			int total = hex_a << 8 + hex_b;
+			uint16_t total = hex_a << 4 + hex_b;
 			return (char)total;
 		}
 		default: {
