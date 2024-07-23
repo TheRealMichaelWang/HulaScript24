@@ -2,40 +2,16 @@
 #include <cctype>
 #include <sstream>
 #include "hash.h"
-#include "compiler.h"
+#include "tokenizer.h"
 
-using namespace HulaScript;
+using namespace HulaScript::Compilation;
 
-compiler::tokenizer::token::token(tokenizer::token_type type) : type(type), payload(std::monostate{}) {
-	
-}
-
-compiler::tokenizer::token::token(tokenizer::token_type type, std::string identifier) : type(type), payload(identifier) {
-	assert(type == tokenizer::token_type::IDENTIFIER || type == tokenizer::token_type::STRING_LITERAL);
-}
-
-compiler::tokenizer::token::token(std::string identifier) : type(tokenizer::token_type::IDENTIFIER), payload(identifier) {
-
-}
-
-compiler::tokenizer::token::token(double number) : type(tokenizer::token_type::NUMBER), payload(number) {
-
-}
-
-compiler::source_loc::source_loc(size_t row, size_t col, std::optional<std::string> file) : row(row), column(col), file(file) {
-
-}
-
-compiler::source_loc::source_loc(std::optional<std::string> file) : row(1), column(1), file(file) {
-
-}
-
-compiler::tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), last_tok(token_type::END_OF_SOURCE) {
+tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), last_tok(token_type::END_OF_SOURCE) {
 	scan_char();
 	scan_token();
 }
 
-char compiler::tokenizer::scan_char() {
+char tokenizer::scan_char() {
 	if (pos == source.size())
 		return '\0';
 
@@ -55,7 +31,7 @@ char compiler::tokenizer::scan_char() {
 	return last_char = to_return;
 }
 
-std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
+std::variant<char, error> tokenizer::scan_control() {
 #define NEXT_HEX(NAME) char CHAR_##NAME = last_char;\
 							scan_char();\
 							uint8_t NAME;\
@@ -66,7 +42,7 @@ std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 							} else if(CHAR_##NAME >= 'A' && CHAR_##NAME <= 'F') {\
 								NAME = (int)(CHAR_##NAME - 'A');\
 							} else {\
-								return error(error::etype::INVALID_CONTROL_CHAR, "Expected hexadecimal digit.", token_begin); \
+								return error(etype::INVALID_CONTROL_CHAR, "Expected hexadecimal digit.", token_begin); \
 							}
 
 	if (last_char == '\\') {
@@ -100,17 +76,17 @@ std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 		}
 		default: {
 			if (last_char == '\0')
-				return error(error::etype::UNEXPECTED_EOF, "Unexpected end in control sequence.", token_begin);
+				return error(etype::UNEXPECTED_EOF, "Unexpected end in control sequence.", token_begin);
 			else {
 				std::stringstream ss;
 				ss << last_char << " is an invalid control character.";
-				return error(error::etype::INVALID_CONTROL_CHAR, ss.str(), token_begin);
+				return error(etype::INVALID_CONTROL_CHAR, ss.str(), token_begin);
 			}
 		}
 		}
 	}
 	else if (last_char == '\0') {
-		return error(error::etype::UNEXPECTED_EOF, "Unexpected end in string literal.", token_begin);
+		return error(etype::UNEXPECTED_EOF, "Unexpected end in string literal.", token_begin);
 	}
 	else {
 		char to_return = last_char;
@@ -120,7 +96,7 @@ std::variant<char, compiler::error> compiler::tokenizer::scan_control() {
 #undef NEXT_HEX
 }
 
-std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::scan_token() {
+std::variant<token, error> tokenizer::scan_token() {
 	while (isspace(last_char)) {
 		scan_char();
 	}
@@ -192,7 +168,7 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 			return last_tok = token(number);
 		}
 		catch(...) {
-			return error(error::etype::CANNOT_PARSE_NUMBER, "Cannot parse provided numerical string.", token_begin);
+			return error(etype::CANNOT_PARSE_NUMBER, "Cannot parse provided numerical string.", token_begin);
 		}
 	}
 	else if (last_char == '\"') {
@@ -267,12 +243,12 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 			return last_tok = token(token_type::NOT);
 		case '&':
 			if (last_char != '&')
-				return error(error::etype::UNEXPECTED_CHAR, "Expected two ampersands(&&), but got something else.", token_begin);
+				return error(etype::UNEXPECTED_CHAR, "Expected two ampersands(&&), but got something else.", token_begin);
 			scan_char();
 			return last_tok = token(token_type::AND);
 		case '|':
 			if (last_char != '|')
-				return error(error::etype::UNEXPECTED_CHAR, "Expected two bars(||), but got something else.", token_begin);
+				return error(etype::UNEXPECTED_CHAR, "Expected two bars(||), but got something else.", token_begin);
 			scan_char();
 			return last_tok = token(token_type::OR);
 		case '?':
@@ -285,13 +261,13 @@ std::variant<compiler::tokenizer::token, compiler::error> compiler::tokenizer::s
 		{
 			std::stringstream ss;
 			ss << "Unexpected character " << last_char << " while parsing token.";
-			return error(error::etype::UNEXPECTED_CHAR, ss.str(), token_begin);
+			return error(etype::UNEXPECTED_CHAR, ss.str(), token_begin);
 		}
 		}
 	}
 }
 
-compiler::error compiler::tokenizer::make_unexpected_tok_err(std::optional< compiler::tokenizer::token_type> expected) {
+error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 	static const char* tok_names[] = {
 		"IDENTIFIER",
 		"NUMBER",
@@ -354,10 +330,10 @@ compiler::error compiler::tokenizer::make_unexpected_tok_err(std::optional< comp
 
 	ss << '.';
 
-	return error(last_tok.type == token_type::END_OF_SOURCE ? error::etype::UNEXPECTED_EOF : error::etype::UNEXPECTED_TOKEN, ss.str(), token_begin);
+	return error(last_tok.type == token_type::END_OF_SOURCE ? etype::UNEXPECTED_EOF : etype::UNEXPECTED_TOKEN, ss.str(), token_begin);
 }
 
-std::optional<compiler::error> compiler::tokenizer::match(tokenizer::token_type expected) {
+std::optional<error> tokenizer::match(token_type expected) {
 	if (last_tok.type == expected) {
 		return std::nullopt;
 	}

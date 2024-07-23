@@ -3,9 +3,9 @@
 #include <algorithm>
 #include "instance.h"
 
-using namespace HulaScript;
+using namespace HulaScript::Runtime;
 
-std::variant<instance::value, instance::error> instance::execute(const uint32_t start_ip, const std::vector<instruction>& new_instructions) {
+std::variant<value, error> instance::execute(const uint32_t start_ip, const std::vector<instruction>& new_instructions) {
 	std::vector<instruction> total_instructions(function_section.size() + new_instructions.size());
 
 	total_instructions.insert(total_instructions.begin(), function_section.begin(), function_section.end());
@@ -18,14 +18,14 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
-													if(OPERAND_NAME.type != EXPECTED_TYPE) {\
-														type_error(EXPECTED_TYPE, OPERAND_NAME.type, ip);\
+													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
+														type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
 														goto error_return;\
 													}\
 
-#define NORMALIZE_ARRAY_INDEX(NUMERICAL_IND, LENGTH)	int32_t index = floor(NUMERICAL_IND.data.number);\
+#define NORMALIZE_ARRAY_INDEX(NUMERICAL_IND, LENGTH)	int32_t index = floor(NUMERICAL_IND.number());\
 														if(index >= LENGTH || -index >= LENGTH) {\
-															index_error(NUMERICAL_IND.data.number, index, LENGTH, ip);\
+															index_error(NUMERICAL_IND.number(), index, LENGTH, ip);\
 															goto error_return;\
 														}\
 	
@@ -38,63 +38,63 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 		{
 		//arithmetic operations
 		case opcode::ADD: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(a.data.number + b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() + b.number()));
 			goto next_ins;
 		}
 		case opcode::SUB: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(a.data.number - b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() - b.number()));
 			goto next_ins;
 		}
 		case opcode::MUL: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(a.data.number * b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() * b.number()));
 			goto next_ins;
 		}
 		case opcode::DIV: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(a.data.number / b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() / b.number()));
 			goto next_ins;
 		}
 		case opcode::MOD: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(fmod(a.data.number, b.data.number)));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(fmod(a.number(), b.number())));
 			goto next_ins;
 		}
 		case opcode::EXP: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_number(pow(a.data.number, b.data.number)));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(pow(a.number(), b.number())));
 			goto next_ins;
 		}
 		case opcode::LESS: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number < b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() < b.number()));
 			goto next_ins;
 		}
 		case opcode::MORE: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number > b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() > b.number()));
 			goto next_ins;
 		}
 		case opcode::LESS_EQUAL: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number <= b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() <= b.number()));
 			goto next_ins;
 		}
 		case opcode::MORE_EQUAL: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number >= b.data.number));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() >= b.number()));
 			goto next_ins;
 		}
 		case opcode::EQUALS: {
@@ -102,7 +102,7 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			evaluation_stack.pop_back();
 			value a = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			evaluation_stack.push_back(make_bool(a.compute_hash() == b.compute_hash()));
+			evaluation_stack.push_back(value(a.compute_hash() == b.compute_hash()));
 			goto next_ins;
 		}
 		case opcode::NOT_EQUALS: {
@@ -110,37 +110,29 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			evaluation_stack.pop_back();
 			value a = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			evaluation_stack.push_back(make_bool(a.compute_hash() != b.compute_hash()));
+			evaluation_stack.push_back(value(a.compute_hash() != b.compute_hash()));
 			goto next_ins;
 		}
 		case opcode::AND: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number != 0 && b.data.number != 0));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() != 0 && b.number() != 0));
 			goto next_ins;
 		}
 		case opcode::OR: {
-			LOAD_OPERAND(b, value::vtype::NUMBER);
-			LOAD_OPERAND(a, value::vtype::NUMBER);
-			evaluation_stack.push_back(make_bool(a.data.number != 0 || b.data.number != 0));
+			LOAD_OPERAND(b, vtype::NUMBER);
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() != 0 || b.number() != 0));
 			goto next_ins;
 		}
 		case opcode::NEGATE: {
-			value& back = evaluation_stack.back();
-			if (back.type != value::vtype::NUMBER) {
-				type_error(value::vtype::NUMBER, back.type, ip);
-				goto error_return;
-			}
-			back.data.number = -back.data.number;
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(-a.number()));
 			goto next_ins;
 		}
 		case opcode::NOT: {
-			value& back = evaluation_stack.back();
-			if (back.type != value::vtype::NUMBER) {
-				type_error(value::vtype::NUMBER, back.type, ip);
-				goto error_return;
-			}
-			back.data.number = back.data.number == 0 ? 1 : 0;
+			LOAD_OPERAND(a, vtype::NUMBER);
+			evaluation_stack.push_back(value(a.number() == 0));
 			goto next_ins;
 		}
 
@@ -180,7 +172,7 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			evaluation_stack.push_back(constants[ins.operand]);
 			goto next_ins;
 		case opcode::PUSH_NIL:
-			evaluation_stack.push_back(make_nil());
+			evaluation_stack.push_back(value());
 			goto next_ins;
 		case opcode::DISCARD_TOP:
 			evaluation_stack.pop_back();
@@ -205,14 +197,14 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 		{
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			LOAD_OPERAND(table_val, value::vtype::TABLE);
+			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.data.table_id];
+			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
 			if (it == table_entry.hash_to_index.end()) {
-				evaluation_stack.push_back(make_nil());
+				evaluation_stack.push_back(value());
 			}
 			else {
 				evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
@@ -224,17 +216,17 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			evaluation_stack.pop_back();
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			LOAD_OPERAND(table_val, value::vtype::TABLE);
+			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.data.table_id];
+			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
 			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
 				if (table_entry.used_elems == table_entry.allocated_capacity) {
-					if (!reallocate_table(table_val.data.table_id, 4, 1))
+					if (!reallocate_table(table_val.table_id(), 4, 1))
 					{
-						current_error = error(error::etype::MEMORY, "Failed to add to table.", ip);
+						current_error = error(etype::MEMORY, "Failed to add to table.", ip);
 						goto error_return;
 					}
 				}
@@ -252,26 +244,21 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 		}
 		case opcode::ALLOCATE_DYN:
 		{
-			LOAD_OPERAND(length_val, value::vtype::NUMBER);
+			LOAD_OPERAND(length_val, vtype::NUMBER);
 			
-			uint32_t size = floor(length_val.data.number);
+			uint32_t size = floor(length_val.number());
 			std::optional<uint64_t> res = allocate_table(size);
 			if (!res.has_value()) {
 				std::stringstream ss;
-				ss << "Failed to allocate new table with " << length_val.data.number << " elements";
-				if (size != length_val.data.number) {
+				ss << "Failed to allocate new table with " << length_val.number() << " elements";
+				if (size != length_val.number()) {
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				current_error = error(error::etype::MEMORY, ss.str(), ip);
+				current_error = error(etype::MEMORY, ss.str(), ip);
 				goto error_return;
 			}
-
-			evaluation_stack.push_back({
-				.type = value::vtype::TABLE,
-				.data = {.table_id = res.value() }
-			});
-
+			evaluation_stack.push_back(value(res.value()));
 			goto next_ins;
 		}
 		case opcode::ALLOCATE_FIXED: {
@@ -279,21 +266,18 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				current_error = error(error::etype::MEMORY, ss.str(), ip);
+				current_error = error(etype::MEMORY, ss.str(), ip);
 				goto error_return;
 			}
-			evaluation_stack.push_back({
-				.type = value::vtype::TABLE,
-				.data = {.table_id = res.value() }
-			});
+			evaluation_stack.push_back(value(res.value()));
 			goto next_ins;
 		}
 
 		//control flow
 		case opcode::COND_JUMP_AHEAD:
 		{
-			LOAD_OPERAND(cond_val, value::vtype::NUMBER);
-			if (cond_val.data.number != 0)
+			LOAD_OPERAND(cond_val, vtype::NUMBER);
+			if (cond_val.number() != 0)
 				goto next_ins;
 		}
 		[[fallthrough]];
@@ -302,8 +286,8 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			continue;
 		case opcode::COND_JUMP_BACK: //used primarily for do..while
 		{
-			LOAD_OPERAND(cond_val, value::vtype::NUMBER);
-			if (cond_val.data.number == 0)
+			LOAD_OPERAND(cond_val, vtype::NUMBER);
+			if (cond_val.number() == 0)
 				goto next_ins;
 		}
 		[[fallthrough]];
@@ -328,8 +312,8 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 					break;
 				case opcode::LOAD_CONSTANT: {
 					value& constant = constants[instructions[end_addr].operand];
-					if (constant.type == value::vtype::CLOSURE)
-						entry.referenced_const_strs.insert(constant.data.str);
+					if (constant.type() == vtype::CLOSURE)
+						entry.referenced_const_strs.insert(constant.str());
 					break;
 				}
 				}
@@ -338,7 +322,7 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 				if (instruction_count == end_addr) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					current_error = error(error::etype::INTERNAL_ERROR, ss.str(), end_addr);
+					current_error = error(etype::INTERNAL_ERROR, ss.str(), end_addr);
 				}
 			} while (instructions[end_addr].operand != opcode::FUNCTION_END);
 
@@ -354,37 +338,29 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			continue;
 		}
 		case opcode::FUNCTION_END: //automatically return if this instruction is ever reached
-			evaluation_stack.push_back(make_nil());
+			evaluation_stack.push_back(value());
 			goto return_function;
 		case opcode::MAKE_CLOSURE: 
 		{
-			LOAD_OPERAND(capture_table, value::vtype::TABLE);
-
-			evaluation_stack.push_back({
-				.type = value::vtype::CLOSURE,
-				.func_id = ins.operand,
-				.data = {.table_id = capture_table.data.table_id }
-			});
+			LOAD_OPERAND(capture_table, vtype::TABLE);
+			evaluation_stack.push_back(value(ins.operand, capture_table.table_id()));
 			goto next_ins;
 		}
 		case opcode::CALL: 
 		{
-			LOAD_OPERAND(fn_val, value::vtype::CLOSURE);
-			evaluation_stack.push_back({
-				.type = value::vtype::TABLE,
-				.data = {
-					.table_id = fn_val.data.table_id
-				}
-			});
+			LOAD_OPERAND(fn_val, vtype::CLOSURE);
+			auto fn_closure = fn_val.closure();
+
+			evaluation_stack.push_back(value(fn_closure.second));
 
 			return_stack.push_back(ip);
-			loaded_function_entry& fn_entry = function_entries[fn_val.func_id];
+			loaded_function_entry& fn_entry = function_entries[fn_closure.first];
 
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
 				std::stringstream ss;
 
 				ss << "Function expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				current_error = error(error::etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
+				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
 				goto error_return;
 			}
 
@@ -406,12 +382,12 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			current_error = error(error::etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
+			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
 			goto error_return;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			current_error = error(error::etype::INTERNAL_ERROR, ss.str(), ip);
+			current_error = error(etype::INTERNAL_ERROR, ss.str(), ip);
 			goto error_return;
 		}
 		}
@@ -421,14 +397,14 @@ std::variant<instance::value, instance::error> instance::execute(const uint32_t 
 	}
 	
 	if (evaluation_stack.empty())
-		evaluation_stack.push_back(make_nil());
+		evaluation_stack.push_back(value());
 	goto value_return;
 	
 error_return:
-	finalize_collect(total_instructions);
+	garbage_collect(true);
 	return current_error.value();
 value_return:
-	finalize_collect(total_instructions);
+	garbage_collect(true);
 	assert(evaluation_stack.size() == 1);
 	return evaluation_stack.back();
 #undef LOAD_OPERAND
@@ -448,8 +424,8 @@ uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 }
 
 
-std::variant<instance::value, instance::error, compiler::error> instance::run(std::string code, std::optional<std::string> source) {
-	compiler::tokenizer tokenizer(code, source);
+std::variant<value, error, HulaScript::Compilation::error> instance::run(std::string code, std::optional<std::string> source) {
+	Compilation::tokenizer tokenizer(code, source);
 
 	uint32_t current_function_size = function_section.size();
 	std::vector<instruction> repl_section;
