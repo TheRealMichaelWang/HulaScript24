@@ -6,167 +6,21 @@
 #include <variant>
 #include <vector>
 #include <set>
+
+#include "tokenizer.h"
 #include "instance.h"
 
-namespace HulaScript {
+namespace HulaScript::Compilation {
 	class compiler {
 	public:
-		class source_loc {
-		public:
-			source_loc(size_t row, size_t col, std::optional<std::string> file);
-			source_loc(std::optional<std::string> file);
-		private:
-			size_t row;
-			size_t column;
-			std::optional<std::string> file;
-		};
-
-		class error {
-		public:
-			enum etype {
-				CANNOT_PARSE_NUMBER,
-				INVALID_CONTROL_CHAR,
-				UNEXPECTED_CHAR,
-				UNEXPECTED_EOF,
-				UNEXPECTED_TOKEN,
-				UNEXPECTED_VALUE,
-				UNEXPECTED_STATEMENT,
-				SYMBOL_NOT_FOUND,
-				SYMBOL_ALREADY_EXISTS,
-				CANNOT_SET_CAPTURED,
-			} type;
-
-			error(etype type, source_loc location) : type(type), location(location), msg(std::nullopt) { }
-			error(etype type, std::string message, source_loc location) : type(type), location(location), msg(msg) { }
-
-		private:
-			std::optional<std::string> msg;
-			source_loc location;
-		};
-
-		class tokenizer {
-		public:
-			enum token_type {
-				IDENTIFIER,
-				NUMBER,
-				STRING_LITERAL,
-
-				TRUE,
-				FALSE,
-				NIL,
-
-				FUNCTION,
-				TABLE,
-				CLASS,
-
-				IF,
-				ELIF,
-				ELSE,
-				WHILE,
-				FOR,
-				DO,
-				RETURN,
-				LOOP_BREAK,
-				LOOP_CONTINUE,
-				GLOBAL,
-
-				THEN,
-				END_BLOCK,
-
-				OPEN_PAREN,
-				CLOSE_PAREN,
-				OPEN_BRACE,
-				CLOSE_BRACE,
-				OPEN_BRACKET,
-				CLOSE_BRACKET,
-				PERIOD,
-				COMMA,
-				QUESTION,
-				COLON,
-
-				PLUS,
-				MINUS,
-				ASTERISK,
-				SLASH,
-				PERCENT,
-				CARET,
-
-				LESS,
-				MORE,
-				LESS_EQUAL,
-				MORE_EQUAL,
-				EQUALS,
-				NOT_EQUAL,
-
-				AND,
-				OR,
-
-				NOT,
-				SET,
-				END_OF_SOURCE
-			};
-
-			class token {
-			public:
-				token_type type;
-
-				token(token_type type);
-				token(token_type type, std::string identifier);
-				token(std::string identifier);
-				token(double number);
-
-				std::string str() {
-					return std::get<std::string>(payload);
-				}
-
-				double number() {
-					return std::get<double>(payload);
-				}
-			private:
-				std::variant<std::monostate, std::string, double> payload;
-			};
-
-			tokenizer(std::string source, std::optional<std::string> file_source);
-
-			token& last_token() {
-				return last_tok;
-			}
-
-			source_loc& last_token_loc() {
-				return token_begin;
-			}
-
-			bool match_last(token_type type) {
-				return last_tok.type == type;
-			}
-
-			std::variant<token, error> scan_token();
-			std::optional<error> match(tokenizer::token_type expected);
-
-			compiler::error make_unexpected_tok_err(std::optional< compiler::tokenizer::token_type> expected);
-		private:
-			size_t current_row;
-			size_t current_col;
-			size_t next_row;
-			size_t next_col;
-			size_t pos;
-			source_loc token_begin;
-			token last_tok;
-			char last_char;
-
-			bool temp_repl_end;
-
-			std::string source;
-			std::optional<std::string> file_source;
-
-			char scan_char();
-			std::variant<char, compiler::error> scan_control();
-		};
-
 		compiler();
 
-		std::optional<error> compile(tokenizer& tokenizer, instance& instance, std::vector<instance::instruction>& repl_section, std::vector<instance::instruction>& function_section, bool repl_mode);
+		std::optional<error> compile(tokenizer& tokenizer, HulaScript::Runtime::instance& target_instance, std::vector<HulaScript::Runtime::instruction>& repl_section, std::vector<HulaScript::Runtime::instruction>& function_section, bool repl_mode);
 	private:
+		typedef HulaScript::Runtime::instance instance;
+		typedef HulaScript::Runtime::instruction instruction;
+		typedef HulaScript::Runtime::opcode opcode;
+
 		struct class_declaration {
 			std::string name;
 			std::vector<std::string> properties;
@@ -203,14 +57,14 @@ namespace HulaScript {
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
 
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& my_instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section, bool expects_statement);
-		std::optional<error> compile_expression(tokenizer& tokenizer, instance& my_instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section, int min_prec);
-		std::optional<error> compile_statement(tokenizer& tokenizer, instance& ny_instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section, bool repl_mode);
-		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& my_instance, std::vector<instance::instruction>& current_section, std::vector<instance::instruction>& function_section);
-		std::optional<error> compile_block(tokenizer& tokenizer, instance& my_instance, std::vector<instance::instruction>& current_function_section, std::vector<instance::instruction>& function_section, bool(*stop_cond)(tokenizer::token_type));
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool expects_statement);
+		std::optional<error> compile_expression(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, int min_prec);
+		std::optional<error> compile_statement(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool repl_mode);
+		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section);
+		std::optional<error> compile_block(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_function_section, std::vector<instruction>& function_section, bool(*stop_cond)(token_type));
 
-		void unwind_locals(std::vector<instance::instruction>& instructions, bool use_unwind_ins);
-		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instance::instruction>& instructions);
+		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins);
+		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions);
 
 		std::optional<error> validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc);
 	};

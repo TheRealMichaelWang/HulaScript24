@@ -2,7 +2,7 @@
 #include <cassert>
 #include "instance.h"
 
-using namespace HulaScript;
+using namespace HulaScript::Runtime;
 
 instance::instance(uint32_t max_locals, uint32_t max_globals, size_t max_table) : 
 	max_locals(max_locals), max_globals(max_globals), max_table(max_table),
@@ -25,4 +25,28 @@ instance::~instance() {
 	free(local_elems);
 	free(global_elems);
 	free(table_elems);
+}
+
+value instance::make_string(const char* string) {
+	char* new_ptr = (char*)malloc(strlen(string) * sizeof(char));
+	assert(new_ptr != NULL);
+	active_strs.insert(new_ptr);
+	return value(new_ptr);
+}
+
+value instance::make_string(std::string str) {
+	return make_string(str.c_str());
+}
+
+uint32_t instance::add_constant(value constant) {
+	uint64_t hash = constant.compute_hash();
+
+	auto it = added_constant_hashes.find(hash);
+	if (it == added_constant_hashes.end()) {
+		uint32_t id = constants.size();
+		constants.push_back(constant);
+		added_constant_hashes.insert({ hash, id });
+		return id;
+	}
+	return it->second;
 }

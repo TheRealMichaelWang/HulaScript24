@@ -131,6 +131,8 @@
     <ClInclude Include="compiler.h" />
     <ClInclude Include="instance.h" />
     <ClInclude Include="hash.h" />
+    <ClInclude Include="tokenizer.h" />
+    <ClInclude Include="value.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="compiler.cpp" />

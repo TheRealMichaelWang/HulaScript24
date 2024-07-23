@@ -3,10 +3,11 @@
 #include <set>
 #include <vector>
 #include <cassert>
+#include <algorithm>
 #include "hash.h"
 #include "instance.h"
 
-using namespace HulaScript;
+using namespace HulaScript::Runtime;
 
 std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t element_count) {
 	auto free_table_it = free_tables.lower_bound({ .allocated_capacity = element_count });
@@ -29,7 +30,7 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 	}
 
 	if (table_offset + element_count > max_table) {
-		garbage_collect();
+		garbage_collect(false);
 		if (table_offset + element_count)
 			return std::nullopt; //out of memory cannot allocate table
 	}
@@ -115,32 +116,43 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uin
 	return false;
 }
 
-void instance::garbage_collect() {
-#define PUSH_TRACE(TO_TRACE) { if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.data.table_id); }\
-								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); } \
-								if(TO_TRACE.type == value::vtype::CLOSURE) { marked_functions.insert(TO_TRACE.func_id); } }
+void instance::garbage_collect(bool finalize_collect) {
+#define PUSH_TRACE(TO_TRACE) switch(TO_TRACE.type()) { case vtype::TABLE: tables_to_mark.push(TO_TRACE.table_id()); break;\
+														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
+														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
+														marked_functions.insert(closure_info.first); tables_to_mark.push(closure_info.second); break; } }
+
+
+	/*{ if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.table_id()); }\
+								else if(TO_TRACE.type() == vtype::STRING) { marked_strs.insert(TO_TRACE.str()); } \
+								if(TO_TRACE.type() == vtype::CLOSURE) { marked_functions.insert(TO_TRACE.closure().first); } }*/
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
-	std::set<uint32_t> marked_functions;
+
+	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
+		return function_entries[a].start_address < function_entries[b].start_address;
+		};
+	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
 
 	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
 	for (uint_fast32_t i = 0; i < global_offset; i++)
 		PUSH_TRACE(global_elems[i]);
 
-	for (instance::value eval_value : evaluation_stack)
-		PUSH_TRACE(eval_value);
-	for (instance::value scratch_value : scratchpad_stack)
-		PUSH_TRACE(scratch_value);
-
+	if (!finalize_collect) {
+		for (value eval_value : evaluation_stack)
+			PUSH_TRACE(eval_value);
+		for (value scratch_value : scratchpad_stack)
+			PUSH_TRACE(scratch_value);
+	}
 #undef PUSH_TRACE
 
 	//sort table ids by table start address
 	auto cmp_by_table_start = [this](uint64_t a, uint64_t b) -> bool {
 		return table_entries[a].table_start < table_entries[b].table_start;
-	};
-	
+		};
+
 	//mark all used tables
 	std::set<uint64_t, decltype(cmp_by_table_start)> marked_tables(cmp_by_table_start);
 
@@ -151,18 +163,25 @@ void instance::garbage_collect() {
 		instance::table_entry entry = table_entries[id];
 
 		marked_tables.emplace(id);
-		
+
 		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
-			instance::value val = table_elems[i + entry.table_start];
-			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
-				tables_to_mark.push(val.data.table_id);
-			}
-			else if (val.type == value::vtype::STRING) {
-				marked_strs.insert(val.data.str);
-			}
-			if (val.type == value::vtype::CLOSURE) {
+			value val = table_elems[i + entry.table_start];
+			switch (val.type())
+			{
+			case vtype::TABLE:
+				if (!marked_tables.contains(val.table_id())) {
+					tables_to_mark.push(val.table_id());
+				}
+				break;
+			case vtype::STRING:
+				marked_strs.insert(val.str());
+				break;
+			case vtype::CLOSURE:
+			{
+				auto closure_info = val.closure();
 				std::queue<uint32_t> functions_to_mark;
-				functions_to_mark.push(val.func_id);
+				functions_to_mark.push(closure_info.first);
+				tables_to_mark.push(closure_info.second);
 				while (!functions_to_mark.empty()) {
 					uint32_t id = functions_to_mark.front();
 					functions_to_mark.pop();
@@ -178,6 +197,8 @@ void instance::garbage_collect() {
 						functions_to_mark.push(refed_function);
 					}
 				}
+				break;
+			}
 			}
 		}
 	}
@@ -199,7 +220,7 @@ void instance::garbage_collect() {
 				constants.erase(constants.begin() + it2->second);
 				added_constant_hashes.erase(hash);
 			}
-			
+
 			free(*it);
 			it = active_strs.erase(it);
 		}
@@ -218,109 +239,31 @@ void instance::garbage_collect() {
 		table_entries[id].table_start = new_table_offset;
 		new_table_offset += entry.used_elems;
 	}
-
 	table_offset = new_table_offset;
 	free_tables.clear();
-}
 
-void instance::finalize_collect(const std::vector<instruction>& instructions) {
-	std::queue<uint64_t> tables_to_mark;
-	std::set<char*> marked_strs;
-
-	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
-		return function_entries[a].start_address < function_entries[b].start_address;
-	};
-	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
-
-#define PUSH_TRACE(TO_TRACE) { if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.data.table_id); }\
-								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); }\
-								if(TO_TRACE.type == value::vtype::CLOSURE) { marked_functions.insert(TO_TRACE.func_id); } }
-
-	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
-		PUSH_TRACE(local_elems[i]);
-	for (uint_fast32_t i = 0; i < global_offset; i++)
-		PUSH_TRACE(global_elems[i]);
-
-#undef PUSH_TRACE
-
-	//clear temporary stacks
-	function_section.clear();
-	evaluation_stack.clear();
-	scratchpad_stack.clear();
-
-	//mark all used tables
-	std::set<uint64_t> marked_tables;
-	while (!tables_to_mark.empty())
-	{
-		uint64_t id = tables_to_mark.front();
-		tables_to_mark.pop();
-		instance::table_entry entry = table_entries[id];
-
-		marked_tables.emplace(id);
-
-		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
-			instance::value val = table_elems[i + entry.table_start];
-			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
-				tables_to_mark.push(val.data.table_id);
-			}
-			else if (val.type == value::vtype::STRING) {
-				marked_strs.insert(val.data.str);
-			}
-			if (val.type == value::vtype::CLOSURE) {
-				std::queue<uint32_t> functions_to_mark;
-				functions_to_mark.push(val.func_id);
-				while (!functions_to_mark.empty()) {
-					uint32_t id = functions_to_mark.front();
-					functions_to_mark.pop();
-
-					if (marked_functions.contains(id)) {
-						continue;
-					}
-					marked_functions.insert(id);
-					for (char* refed_str : function_entries[id].referenced_const_strs) {
-						marked_strs.insert(refed_str);
-					}
-					for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
-						functions_to_mark.push(refed_function);
-					}
-				}
+	if (finalize_collect) {
+		//remove unreachable functions
+		for (auto it = function_entries.begin(); it != function_entries.end(); it++) {
+			if (!marked_functions.contains(it->first)) {
+				available_function_ids.push(it->first);
+				it = function_entries.erase(it);
 			}
 		}
-	}
 
-	//free unreachable strings
-	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
-	{
-		if (!marked_strs.contains(*it)) {
-			uint64_t hash = str_hash(*it);
-			auto it2 = added_constant_hashes.find(hash);
-			if (it2 != added_constant_hashes.end()) {
-				constants.erase(constants.begin() + it2->second);
-				added_constant_hashes.erase(hash);
-			}
+		//compact instructions of used functions only
+		uint32_t current_ip = 0;
+		for (uint32_t id : marked_functions) {
+			instance::loaded_function_entry& entry = function_entries[id];
 
-			free(*it);
-			it = active_strs.erase(it);
+			if (entry.start_address == current_ip)
+				continue;
+
+			auto start_it = function_section.begin() + entry.start_address;
+			std::move(start_it, start_it + entry.length, function_section.begin() + current_ip);
+
+			entry.start_address = current_ip;
+			current_ip += entry.length;
 		}
-	}
-
-	//remove unreachable functions
-	for (auto it = function_entries.begin(); it != function_entries.end(); it++) {
-		if (!marked_functions.contains(it->first)) {
-			available_function_ids.push(it->first);
-			it = function_entries.erase(it);
-		}
-	}
-
-	//compact instructions of used functions only
-	uint32_t current_ip = 0;
-	for (uint32_t id : marked_functions) {
-		auto it = function_entries.find(id);
-
-		auto ins_begin = instructions.begin() + it->second.start_address;
-		function_section.insert(function_section.begin() + current_ip, ins_begin, ins_begin + it->second.length);
-
-		it->second.start_address = current_ip;
-		current_ip += it->second.length;
 	}
 }
