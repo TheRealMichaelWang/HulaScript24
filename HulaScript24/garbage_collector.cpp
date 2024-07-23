@@ -124,9 +124,9 @@ void instance::garbage_collect() {
 	std::set<char*> marked_strs;
 	std::set<uint32_t> marked_functions;
 
-	for (int i = 0; i < local_offset + extended_local_offset; i++)
+	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
-	for (int i = 0; i < global_offset; i++)
+	for (uint_fast32_t i = 0; i < global_offset; i++)
 		PUSH_TRACE(global_elems[i]);
 
 	for (instance::value eval_value : evaluation_stack)
@@ -152,7 +152,7 @@ void instance::garbage_collect() {
 
 		marked_tables.emplace(id);
 		
-		for (int i = 0; i < entry.used_elems; i++) {
+		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
 			instance::value val = table_elems[i + entry.table_start];
 			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
 				tables_to_mark.push(val.data.table_id);
@@ -236,15 +236,15 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 								else if(TO_TRACE.type == value::vtype::STRING) { marked_strs.insert(TO_TRACE.data.str); }\
 								if(TO_TRACE.type == value::vtype::CLOSURE) { marked_functions.insert(TO_TRACE.func_id); } }
 
-	for (int i = 0; i < local_offset + extended_local_offset; i++)
+	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
-	for (int i = 0; i < global_offset; i++)
+	for (uint_fast32_t i = 0; i < global_offset; i++)
 		PUSH_TRACE(global_elems[i]);
 
 #undef PUSH_TRACE
 
 	//clear temporary stacks
-	loaded_functions.clear();
+	function_section.clear();
 	evaluation_stack.clear();
 	scratchpad_stack.clear();
 
@@ -258,7 +258,7 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 
 		marked_tables.emplace(id);
 
-		for (int i = 0; i < entry.used_elems; i++) {
+		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
 			instance::value val = table_elems[i + entry.table_start];
 			if (val.is_gc_type() && !marked_tables.contains(val.data.table_id)) {
 				tables_to_mark.push(val.data.table_id);
@@ -318,7 +318,7 @@ void instance::finalize_collect(const std::vector<instruction>& instructions) {
 		auto it = function_entries.find(id);
 
 		auto ins_begin = instructions.begin() + it->second.start_address;
-		loaded_functions.insert(loaded_functions.begin() + current_ip, ins_begin, ins_begin + it->second.length);
+		function_section.insert(function_section.begin() + current_ip, ins_begin, ins_begin + it->second.length);
 
 		it->second.start_address = current_ip;
 		current_ip += it->second.length;
