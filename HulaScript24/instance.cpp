@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cassert>
+#include "hash.h"
 #include "instance.h"
 
 using namespace HulaScript::Runtime;
@@ -27,14 +28,11 @@ instance::~instance() {
 	free(table_elems);
 }
 
-value instance::make_string(const char* string) {
-	char* new_ptr = (char*)malloc(strlen(string) * sizeof(char));
-	assert(new_ptr != NULL);
-	active_strs.insert(new_ptr);
-	return value(new_ptr);
+uint32_t instance::make_string(const char* string) {
+	return add_constant(value((char*)string));
 }
 
-value instance::make_string(std::string str) {
+uint32_t instance::make_string(std::string str) {
 	return make_string(str.c_str());
 }
 
@@ -43,8 +41,23 @@ uint32_t instance::add_constant(value constant) {
 
 	auto it = added_constant_hashes.find(hash);
 	if (it == added_constant_hashes.end()) {
-		uint32_t id = (uint32_t)constants.size();
-		constants.push_back(constant);
+		uint32_t id;
+		if (available_constant_ids.empty())
+			id = (uint32_t)constants.size();
+		else {
+			id = available_constant_ids.front();
+			available_constant_ids.pop();
+		}
+
+		if (constant.type() == vtype::STRING) {
+			char* to_store = strdup(constant.str());
+			assert(to_store != NULL);
+			active_strs.insert(to_store);
+			constants.push_back(value(to_store));
+		}
+		else {
+			constants.push_back(constant);
+		}
 		added_constant_hashes.insert({ hash, id });
 		return id;
 	}

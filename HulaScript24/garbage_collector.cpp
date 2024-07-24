@@ -30,7 +30,7 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 	}
 
 	if (table_offset + element_count > max_table) {
-		garbage_collect(false);
+		garbage_collect(gc_collection_mode::STANDARD);
 		if (table_offset + element_count)
 			return std::nullopt; //out of memory cannot allocate table
 	}
@@ -116,7 +116,7 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uin
 	return false;
 }
 
-void instance::garbage_collect(bool finalize_collect) {
+void instance::garbage_collect(gc_collection_mode mode) {
 #define PUSH_TRACE(TO_TRACE) switch(TO_TRACE.type()) { case vtype::TABLE: tables_to_mark.push(TO_TRACE.table_id()); break;\
 														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
 														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
@@ -132,7 +132,7 @@ void instance::garbage_collect(bool finalize_collect) {
 
 	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
 		return function_entries[a].start_address < function_entries[b].start_address;
-		};
+	};
 	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
 
 	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
@@ -140,21 +140,26 @@ void instance::garbage_collect(bool finalize_collect) {
 	for (uint_fast32_t i = 0; i < global_offset; i++)
 		PUSH_TRACE(global_elems[i]);
 
-	if (!finalize_collect) {
+	if (mode == gc_collection_mode::STANDARD) {
 		for (value eval_value : evaluation_stack)
 			PUSH_TRACE(eval_value);
 		for (value scratch_value : scratchpad_stack)
 			PUSH_TRACE(scratch_value);
 	}
+	else {
+		scratchpad_stack.clear();
+		if (mode == gc_collection_mode::FINALIZE_COLLECT_RETURN) {
+			PUSH_TRACE(evaluation_stack.back());
+		}
+		else {
+			evaluation_stack.clear();
+		}
+	}
+
 #undef PUSH_TRACE
 
-	//sort table ids by table start address
-	auto cmp_by_table_start = [this](uint64_t a, uint64_t b) -> bool {
-		return table_entries[a].table_start < table_entries[b].table_start;
-		};
-
 	//mark all used tables
-	std::set<uint64_t, decltype(cmp_by_table_start)> marked_tables(cmp_by_table_start);
+	std::set<uint64_t> marked_tables;
 
 	while (!tables_to_mark.empty())
 	{
@@ -217,10 +222,10 @@ void instance::garbage_collect(bool finalize_collect) {
 	for (auto it = active_strs.begin(); it != active_strs.end();)
 	{
 		if (!marked_strs.contains(*it)) {
-			uint64_t hash = str_hash(*it);
+			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
-				constants.erase(constants.begin() + it2->second);
+				available_constant_ids.push(it2->second);
 				added_constant_hashes.erase(hash);
 			}
 
@@ -233,8 +238,14 @@ void instance::garbage_collect(bool finalize_collect) {
 	}
 
 	//compact used tables
+
+	//sort table ids by table start address
+	std::vector<uint64_t> sorted_marked(marked_tables.begin(), marked_tables.end());
+	std::ranges::sort(sorted_marked, [this](uint64_t a, uint64_t b) -> bool {
+		return table_entries[a].table_start < table_entries[b].table_start;
+	});
 	size_t new_table_offset = 0;
-	for (uint64_t id : marked_tables) {
+	for (uint64_t id : sorted_marked) {
 		instance::table_entry entry = table_entries[id];
 
 		if (entry.table_start == new_table_offset)
@@ -248,7 +259,7 @@ void instance::garbage_collect(bool finalize_collect) {
 	table_offset = new_table_offset;
 	free_tables.clear();
 
-	if (finalize_collect) {
+	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR) {
 		//remove unreachable functions
 		for (auto it = function_entries.begin(); it != function_entries.end();) {
 			if (!marked_functions.contains(it->first)) {

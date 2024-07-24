@@ -401,12 +401,14 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 		evaluation_stack.push_back(value());
 	
 stop_exec:
-	garbage_collect(true);
-	start_ip = _function_section.size();
 	if (current_error.has_value()) {
+		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
+		start_ip = _function_section.size();
 		return current_error.value();
 	}
 	else {
+		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
+		start_ip = _function_section.size();
 		assert(evaluation_stack.size() == 1);
 		value to_return = evaluation_stack.back();
 		evaluation_stack.pop_back();

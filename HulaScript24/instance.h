@@ -19,8 +19,8 @@ namespace HulaScript::Runtime {
 		instance(uint32_t max_locals, uint32_t max_globals, size_t max_table);
 		~instance();
 
-		value make_string(const char* str);
-		value make_string(std::string str);
+		uint32_t make_string(const char* str);
+		uint32_t make_string(std::string str);
 
 		uint32_t add_constant(value constant);
 
@@ -36,6 +36,12 @@ namespace HulaScript::Runtime {
 
 		std::variant<value, error> execute(const std::vector<instruction>& new_instructions);
 	private:
+		enum gc_collection_mode {
+			STANDARD = 0,
+			FINALIZE_COLLECT_ERROR = 1,
+			FINALIZE_COLLECT_RETURN = 2
+		};
+
 		struct table_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;
 			uint32_t used_elems = 0;
@@ -69,6 +75,7 @@ namespace HulaScript::Runtime {
 
 		std::vector<value> constants;
 		std::map<uint64_t, uint32_t> added_constant_hashes;
+		std::queue<uint32_t> available_constant_ids;
 
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, start_ip;
 		size_t table_offset, max_table;
@@ -93,6 +100,6 @@ namespace HulaScript::Runtime {
 		bool reallocate_table(uint64_t table, uint32_t element_count);
 		bool reallocate_table(uint64_t table, uint32_t max_elem_extend, uint32_t min_elem_extend);
 
-		void garbage_collect(bool finalize_collect);
+		void garbage_collect(gc_collection_mode mode);
 	};
 }
