@@ -259,8 +259,8 @@ void instance::garbage_collect(bool finalize_collect) {
 			if (entry.start_address == current_ip)
 				continue;
 
-			auto start_it = function_section.begin() + entry.start_address;
-			std::move(start_it, start_it + entry.length, function_section.begin() + current_ip);
+			auto start_it = _function_section.begin() + entry.start_address;
+			std::move(start_it, start_it + entry.length, _function_section.begin() + current_ip);
 
 			entry.start_address = current_ip;
 			current_ip += entry.length;

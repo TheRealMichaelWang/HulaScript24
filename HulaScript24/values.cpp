@@ -27,3 +27,19 @@ const uint64_t value::compute_hash() {
 
 	return hash_combine(init_hash, (uint64_t)_type);
 }
+
+std::string value::to_print_string() {
+	switch (_type)
+	{
+	case HulaScript::Runtime::CLOSURE:
+		return std::to_string(func_id);
+	case HulaScript::Runtime::TABLE:
+		return std::to_string(data.table_id);
+	case HulaScript::Runtime::STRING:
+		return std::string(data.str);
+	case HulaScript::Runtime::NUMBER:
+		return std::to_string(data.number);
+	case HulaScript::Runtime::NIL:
+		return "nil";
+	}
+}

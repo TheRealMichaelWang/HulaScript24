@@ -131,6 +131,7 @@
     <ClInclude Include="compiler.h" />
     <ClInclude Include="instance.h" />
     <ClInclude Include="hash.h" />
+    <ClInclude Include="repl.h" />
     <ClInclude Include="tokenizer.h" />
     <ClInclude Include="value.h" />
   </ItemGroup>
@@ -140,6 +141,7 @@
     <ClCompile Include="garbage_collector.cpp" />
     <ClCompile Include="instance.cpp" />
     <ClCompile Include="interpreter.cpp" />
+    <ClCompile Include="repl.cpp" />
     <ClCompile Include="Source.cpp" />
     <ClCompile Include="tokenizer.cpp" />
     <ClCompile Include="values.cpp" />

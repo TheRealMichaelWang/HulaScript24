@@ -5,11 +5,12 @@
 
 using namespace HulaScript::Runtime;
 
-std::variant<value, error> instance::execute(const uint32_t start_ip, const std::vector<instruction>& new_instructions) {
-	std::vector<instruction> total_instructions(function_section.size() + new_instructions.size());
+std::variant<value, error> instance::execute(const std::vector<instruction>& new_instructions) {
+	std::vector<instruction> total_instructions;
+	total_instructions.reserve(_function_section.size() + new_instructions.size());
 
-	total_instructions.insert(total_instructions.begin(), function_section.begin(), function_section.end());
-	total_instructions.insert(total_instructions.begin() + function_section.size(), new_instructions.begin(), new_instructions.end());
+	total_instructions.insert(total_instructions.begin(), _function_section.begin(), _function_section.end());
+	total_instructions.insert(total_instructions.begin() + _function_section.size(), new_instructions.begin(), new_instructions.end());
 
 	instruction* instructions = total_instructions.data();
 	uint_fast32_t instruction_count = total_instructions.size();
@@ -20,13 +21,13 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
 														type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
-														goto error_return;\
+														goto stop_exec;\
 													}\
 
 #define NORMALIZE_ARRAY_INDEX(NUMERICAL_IND, LENGTH)	int32_t index = floor(NUMERICAL_IND.number());\
 														if(index >= LENGTH || -index >= LENGTH) {\
 															index_error(NUMERICAL_IND.number(), index, LENGTH, ip);\
-															goto error_return;\
+															goto stop_exec;\
 														}\
 	
 	std::optional<error> current_error = std::nullopt;
@@ -145,7 +146,6 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 			goto next_ins;
 		case opcode::STORE_LOCAL:
 			local_elems[local_offset + ins.operand] = evaluation_stack.back();
-			evaluation_stack.pop_back();
 			goto next_ins;
 		case opcode::STORE_GLOBAL:
 			global_elems[ins.operand] = evaluation_stack.back();
@@ -227,7 +227,7 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 					if (!reallocate_table(table_val.table_id(), 4, 1))
 					{
 						current_error = error(etype::MEMORY, "Failed to add to table.", ip);
-						goto error_return;
+						goto stop_exec;
 					}
 				}
 
@@ -256,7 +256,7 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 				}
 				ss << '.';
 				current_error = error(etype::MEMORY, ss.str(), ip);
-				goto error_return;
+				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
 			goto next_ins;
@@ -267,7 +267,7 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
 				current_error = error(etype::MEMORY, ss.str(), ip);
-				goto error_return;
+				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
 			goto next_ins;
@@ -361,7 +361,7 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 
 				ss << "Function expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
 				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
-				goto error_return;
+				goto stop_exec;
 			}
 
 			local_offset += extended_local_offset;
@@ -373,7 +373,7 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 		case opcode::RETURN:
 		return_function:
 			if (return_stack.empty())
-				goto value_return;
+				goto stop_exec;
 
 			ip = return_stack.back();
 			return_stack.pop_back();
@@ -383,12 +383,12 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 			goto next_ins;
 		case opcode::INVALID:
 			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
-			goto error_return;
+			goto stop_exec;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
 			current_error = error(etype::INTERNAL_ERROR, ss.str(), ip);
-			goto error_return;
+			goto stop_exec;
 		}
 		}
 
@@ -398,15 +398,19 @@ std::variant<value, error> instance::execute(const uint32_t start_ip, const std:
 	
 	if (evaluation_stack.empty())
 		evaluation_stack.push_back(value());
-	goto value_return;
 	
-error_return:
+stop_exec:
 	garbage_collect(true);
-	return current_error.value();
-value_return:
-	garbage_collect(true);
-	assert(evaluation_stack.size() == 1);
-	return evaluation_stack.back();
+	start_ip = _function_section.size();
+	if (current_error.has_value()) {
+		return current_error.value();
+	}
+	else {
+		assert(evaluation_stack.size() == 1);
+		value toreturn = evaluation_stack.back();
+		evaluation_stack.pop_back();
+		return toreturn;
+	}
 #undef LOAD_OPERAND
 #undef NORMALIZE_ARRAY_INDEX
 }
@@ -421,25 +425,4 @@ uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 	}
 	instructions.push_back({ .op = opcode::FUNCTION, .operand = id });
 	return id;
-}
-
-
-std::variant<value, error, HulaScript::Compilation::error> instance::run(std::string code, std::optional<std::string> source) {
-	Compilation::tokenizer tokenizer(code, source);
-
-	uint32_t current_function_size = function_section.size();
-	std::vector<instruction> repl_section;
-
-	auto compile_result = my_compiler.compile(tokenizer, *this, repl_section, function_section, false);
-	if (compile_result.has_value()) {
-		function_section.erase(function_section.begin() + current_function_size, function_section.end());
-		return compile_result.value();
-	}
-
-	auto run_result = execute(current_function_size, repl_section);
-	if (std::holds_alternative<error>(run_result)) {
-		return std::get<error>(run_result);
-	}
-
-	return std::get<value>(run_result);
 }

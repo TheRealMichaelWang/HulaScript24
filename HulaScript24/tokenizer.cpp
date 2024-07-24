@@ -6,14 +6,14 @@
 
 using namespace HulaScript::Compilation;
 
-tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), last_tok(token_type::END_OF_SOURCE) {
+tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), pos(0), last_tok(token_type::END_OF_SOURCE) {
 	scan_char();
 	scan_token();
 }
 
 char tokenizer::scan_char() {
 	if (pos == source.size())
-		return '\0';
+		return last_char = '\0';
 
 	char to_return = source.at(pos);
 	pos++;
