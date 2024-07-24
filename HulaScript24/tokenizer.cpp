@@ -273,6 +273,10 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 		"NUMBER",
 		"STRING_LITERAL",
 
+		"TRUE",
+		"FALSE",
+		"NIL",
+
 		"FUNCTION",
 		"TABLE",
 		"DICT",
@@ -285,6 +289,9 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 		"FOR",
 		"DO",
 		"RETURN",
+		"BREAK",
+		"CONTINUE",
+		"GLOBAL",
 
 		"THEN",
 		"END_BLOCK",
@@ -297,6 +304,8 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 		"CLOSE_BRACKET",
 		"PERIOD",
 		"COMMA",
+		"QUESTION",
+		"COLON",
 
 		"PLUS",
 		"MINUS",
@@ -311,19 +320,19 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 		"MORE_EQUAL",
 		"EQUALS",
 		"NOT_EQUAL",
-		"NOT",
-		"SET",
 
 		"AND",
 		"OR",
 
+		"NOT",
+		"SET",
 		"END_OF_SOURCE"
 	};
 
 	std::stringstream ss;
 	ss << "Got token " << tok_names[last_tok.type];
 	if (last_tok.type == token_type::IDENTIFIER)
-		ss << "(" << last_tok.str() << ")";
+		ss << '(' << last_tok.str() << ')';
 	
 	if(expected.has_value())
 		ss << ", but expected " << tok_names[expected.value()];

@@ -3,7 +3,7 @@
 #include <variant>
 #include "repl.h"
 
-void main() {
+int main() {
 	HulaScript::repl_instance instance("myInstance", 1024, 64, 1024);
 
 	for (;;) {
@@ -17,9 +17,11 @@ void main() {
 		else if(std::get<bool>(input_res)) {
 			auto run_res = instance.run();
 			if (std::holds_alternative<HulaScript::Runtime::error>(run_res)) {
-
+				auto runtime_err = std::get<HulaScript::Runtime::error>(run_res);
+				
 			}
 			else if (std::holds_alternative<HulaScript::Compilation::error>(run_res)) {
+				auto compilation_err = std::get<HulaScript::Compilation::error>(run_res);
 
 			}
 			else {
@@ -28,4 +30,6 @@ void main() {
 			}
 		}
 	}
+
+	return 0;
 }

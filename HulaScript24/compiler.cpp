@@ -70,7 +70,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
 					function_declaration& current_func = func_decl_stack.back();
 
-					for (uint32_t i = func_decl_stack.size() - 1; i > local_it->second.func_id; i--) {
+					for (uint32_t i = (uint32_t)(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {
 						auto capture_it = func_decl_stack[i].captured_vars.find(id);
 						if (capture_it == func_decl_stack[i].captured_vars.end()) {
 							func_decl_stack[i].captured_vars.insert(id);
@@ -292,6 +292,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 					MATCH_AND_SCAN(token_type::COMMA);
 				}
 				UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false));
+				length++;
 			}
 			MATCH_AND_SCAN(token_type::CLOSE_PAREN);
 
@@ -303,11 +304,11 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 		case token_type::QUESTION:
 		{
 			SCAN;
-			uint32_t cond_ins_ip = current_section.size();
+			uint32_t cond_ins_ip = (uint32_t)current_section.size();
 			current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
 
 			UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false)); //if true value
-			uint32_t jump_to_end_ip = current_section.size();
+			uint32_t jump_to_end_ip = (uint32_t)current_section.size();
 			current_section.push_back({ .op = opcode::JUMP_AHEAD });
 
 			MATCH_AND_SCAN(token_type::COLON);
@@ -370,10 +371,10 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, instance&
 	case token_type::WHILE: {
 		SCAN;
 		loop_stack.push_back({});
-		uint32_t loop_begin_ip = current_section.size();
+		uint32_t loop_begin_ip = (uint32_t)current_section.size();
 		UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false));
 		MATCH_AND_SCAN(token_type::DO);
-		uint32_t cond_jump_ip = current_section.size();
+		uint32_t cond_jump_ip = (uint32_t)current_section.size();
 		current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
 		UNWRAP(compile_block(tokenizer, target_instance, current_section, function_section, [](token_type t) -> bool { return t == token_type::END_BLOCK; }));
 		MATCH_AND_SCAN(token_type::END_BLOCK);
@@ -386,10 +387,10 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, instance&
 	case token_type::DO: {
 		SCAN;
 		loop_stack.push_back({});
-		uint32_t loop_begin_ip = current_section.size();
+		uint32_t loop_begin_ip = (uint32_t)current_section.size();
 		UNWRAP_AND_HANDLE(compile_block(tokenizer, target_instance, current_section, function_section, [](token_type t) -> bool { return t == token_type::WHILE; }), loop_stack.pop_back());
 		MATCH_AND_SCAN_AND_HANDLE(token_type::WHILE, loop_stack.pop_back());
-		uint32_t continue_ip = current_section.size();
+		uint32_t continue_ip = (uint32_t)current_section.size();
 		UNWRAP_AND_HANDLE(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false), loop_stack.pop_back());
 		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip) });
 		unwind_loop(continue_ip, (uint32_t)current_section.size(), current_section);
@@ -415,9 +416,9 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, instance&
 			current_section.push_back({ .op = opcode::JUMP_AHEAD });
 		} while (tokenizer.match_last(token_type::ELIF));
 
+		current_section[last_cond_check_ip].operand = (uint32_t)(current_section.size() - last_cond_check_ip);
 		if (tokenizer.match_last(token_type::ELSE)) {
 			SCAN;
-			current_section[last_cond_check_ip].operand = (uint32_t)(current_section.size() - last_cond_check_ip);
 			UNWRAP(compile_block(tokenizer, target_instance, current_section, function_section, [](token_type t) -> bool { return t == token_type::END_BLOCK; }));
 		}
 		else {
@@ -462,6 +463,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, instance&
 	default:
 		if (repl_mode) {
 			UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, true));
+			MATCH(token_type::END_OF_SOURCE);
 			repl_stop_parsing = true;
 		}
 		else {
@@ -499,7 +501,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
 	uint32_t param_id = 1;
-	for (int_fast32_t i = param_ids.size() - 1; i >= 0; i--) {
+	for (int_fast32_t i = (int_fast32_t)(param_ids.size() - 1); i >= 0; i--) {
 		
 		variable_symbol sym = {
 			.name = param_ids[i],
@@ -508,6 +510,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			.func_id = (uint32_t)(func_decl_stack.size() - 1)
 		};
 		active_variables.insert({ param_ids[i], sym });
+		func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
 	}
 
 	while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE))
@@ -524,13 +527,11 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		target_instance.recycle_function_id(func_id);
 	});
 	unwind_locals(func_instructions, false);
-	function_section.insert(function_section.begin() + function_section.size(), func_instructions.begin(), func_instructions.end());
-
 	{
-		func_instructions[0].operand = (uint32_t)func_instructions.size();
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
+		function_section.insert(function_section.begin() + function_section.size(), func_instructions.begin(), func_instructions.end());
 		
-		uint32_t capture_size = func_decl_stack.back().captured_vars.size();
+		uint32_t capture_size = (uint32_t)func_decl_stack.back().captured_vars.size();
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = capture_size });
 
 		for (auto captured_var : func_decl_stack.back().captured_vars) {

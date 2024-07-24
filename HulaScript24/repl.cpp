@@ -6,7 +6,7 @@ using namespace HulaScript;
 std::variant<bool, Compilation::error> repl_instance::write_input(std::string input) {
 	Compilation::tokenizer tokenizer(input, name);
 	
-	input_builder << input << '\n';
+	input_builder << input << "\n\0";
 	while (!tokenizer.match_last(Compilation::token_type::END_OF_SOURCE))
 	{
 		Compilation::token_type type = tokenizer.last_token().type;
@@ -56,8 +56,9 @@ std::variant<Runtime::value, Runtime::error, Compilation::error> repl_instance::
 
 	std::vector<Runtime::instruction> repl_section;
 	auto compile_res = compiler.compile(tokenizer, instance, repl_section, instance.function_section(), true);
-	if (input_builder.rdbuf()) { input_builder.rdbuf()->pubseekpos(0); }
-	
+	input_builder.str(std::string());
+	input_builder.clear();
+		
 	if (compile_res.has_value()) {
 		return compile_res.value();
 	}

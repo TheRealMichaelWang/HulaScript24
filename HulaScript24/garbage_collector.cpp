@@ -204,14 +204,17 @@ void instance::garbage_collect(bool finalize_collect) {
 	}
 
 	//sweep unreachable tables
-	for (auto table_it = table_entries.begin(); table_it != table_entries.end(); table_it++) {
+	for (auto table_it = table_entries.begin(); table_it != table_entries.end();) {
 		if (!marked_tables.contains(table_it->first)) {
 			available_table_ids.push(table_it->first);
 			table_it = table_entries.erase(table_it);
 		}
+		else {
+			table_it++;
+		}
 	}
 	//free unreachable strings
-	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
+	for (auto it = active_strs.begin(); it != active_strs.end();)
 	{
 		if (!marked_strs.contains(*it)) {
 			uint64_t hash = str_hash(*it);
@@ -223,6 +226,9 @@ void instance::garbage_collect(bool finalize_collect) {
 
 			free(*it);
 			it = active_strs.erase(it);
+		}
+		else {
+			it++;
 		}
 	}
 
@@ -244,11 +250,13 @@ void instance::garbage_collect(bool finalize_collect) {
 
 	if (finalize_collect) {
 		//remove unreachable functions
-		for (auto it = function_entries.begin(); it != function_entries.end(); it++) {
+		for (auto it = function_entries.begin(); it != function_entries.end();) {
 			if (!marked_functions.contains(it->first)) {
 				available_function_ids.push(it->first);
 				it = function_entries.erase(it);
 			}
+			else
+				it++;
 		}
 
 		//compact instructions of used functions only
@@ -256,8 +264,10 @@ void instance::garbage_collect(bool finalize_collect) {
 		for (uint32_t id : marked_functions) {
 			instance::loaded_function_entry& entry = function_entries[id];
 
-			if (entry.start_address == current_ip)
+			if (entry.start_address == current_ip) {
+				current_ip += entry.length;
 				continue;
+			}
 
 			auto start_it = _function_section.begin() + entry.start_address;
 			std::move(start_it, start_it + entry.length, _function_section.begin() + current_ip);
@@ -265,5 +275,6 @@ void instance::garbage_collect(bool finalize_collect) {
 			entry.start_address = current_ip;
 			current_ip += entry.length;
 		}
+		_function_section.erase(_function_section.begin() + current_ip, _function_section.end());
 	}
 }

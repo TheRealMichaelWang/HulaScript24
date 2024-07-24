@@ -43,7 +43,7 @@ uint32_t instance::add_constant(value constant) {
 
 	auto it = added_constant_hashes.find(hash);
 	if (it == added_constant_hashes.end()) {
-		uint32_t id = constants.size();
+		uint32_t id = (uint32_t)constants.size();
 		constants.push_back(constant);
 		added_constant_hashes.insert({ hash, id });
 		return id;
