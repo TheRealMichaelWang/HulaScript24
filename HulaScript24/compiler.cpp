@@ -78,7 +78,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 					}
 
 					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table, which is always local variable 0 in functions
-					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(target_instance.make_string(id)) });
+					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(id) });
 					current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				}
 				else {
@@ -139,7 +139,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 		SCAN;
 		break;
 	case token_type::STRING_LITERAL:
-		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(target_instance.make_string(token.str())) });
+		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(token.str()) });
 		SCAN;
 		break;
 	case token_type::NIL:
@@ -249,7 +249,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 		{
 			SCAN;
 			MATCH(token_type::IDENTIFIER);
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(target_instance.make_string(tokenizer.last_token().str())) });
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(tokenizer.last_token().str()) });
 			SCAN;
 
 			if (tokenizer.match_last(token_type::SET)) {
@@ -538,7 +538,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			current_section.push_back({ .op = opcode::DUPLICATE });
 			
 			auto var_it = active_variables.find(captured_var);
-			uint32_t prop_str_id = target_instance.add_constant(target_instance.make_string(captured_var));
+			uint32_t prop_str_id = target_instance.make_string(captured_var);
 			if (var_it->second.func_id < func_decl_stack.size() - 1) { //this is a captured 
 				current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table
 				current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id});

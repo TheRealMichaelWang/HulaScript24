@@ -24,6 +24,15 @@
     <ClInclude Include="hash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="repl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tokenizer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="value.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="instance.cpp">
@@ -48,6 +57,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="compiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="repl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
