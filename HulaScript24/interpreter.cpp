@@ -13,7 +13,7 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 	total_instructions.insert(total_instructions.begin() + _function_section.size(), new_instructions.begin(), new_instructions.end());
 
 	instruction* instructions = total_instructions.data();
-	uint_fast32_t instruction_count = total_instructions.size();
+	uint_fast32_t instruction_count = (uint_fast32_t)total_instructions.size();
 
 	uint_fast32_t ip = start_ip;
 
@@ -246,7 +246,7 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 		{
 			LOAD_OPERAND(length_val, vtype::NUMBER);
 			
-			uint32_t size = floor(length_val.number());
+			uint32_t size = (uint32_t)floor(length_val.number());
 			std::optional<uint64_t> res = allocate_table(size);
 			if (!res.has_value()) {
 				std::stringstream ss;
@@ -323,8 +323,9 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
 					current_error = error(etype::INTERNAL_ERROR, ss.str(), end_addr);
+					goto stop_exec;
 				}
-			} while (instructions[end_addr].operand != opcode::FUNCTION_END);
+			} while (instructions[end_addr].op != opcode::FUNCTION_END);
 
 			entry.length = end_addr - ip;
 			ip = end_addr;
@@ -407,9 +408,9 @@ stop_exec:
 	}
 	else {
 		assert(evaluation_stack.size() == 1);
-		value toreturn = evaluation_stack.back();
+		value to_return = evaluation_stack.back();
 		evaluation_stack.pop_back();
-		return toreturn;
+		return to_return;
 	}
 #undef LOAD_OPERAND
 #undef NORMALIZE_ARRAY_INDEX

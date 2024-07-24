@@ -41,5 +41,7 @@ std::string value::to_print_string() {
 		return std::to_string(data.number);
 	case HulaScript::Runtime::NIL:
 		return "nil";
+	default:
+		return "error";
 	}
 }

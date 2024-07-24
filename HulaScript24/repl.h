@@ -11,7 +11,7 @@ namespace HulaScript {
 	public:
 		repl_instance(std::optional<std::string> name, uint32_t max_locals, uint32_t max_globals, size_t max_table) : name(name), instance(max_locals, max_globals, max_table){ }
 
-		//input is a peice of the source. The function will return when the source is complete enough for evaluation
+		//input is a piece of the source. The function will return when the source is complete enough for evaluation
 		std::variant<bool, Compilation::error> write_input(std::string input);
 
 		std::variant<Runtime::value, Runtime::error, Compilation::error> run();

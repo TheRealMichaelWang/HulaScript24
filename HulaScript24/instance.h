@@ -38,10 +38,10 @@ namespace HulaScript::Runtime {
 	private:
 		struct table_entry {
 			std::map<uint64_t, uint32_t> hash_to_index;
-			uint32_t used_elems;
+			uint32_t used_elems = 0;
 
-			size_t table_start;
-			uint32_t allocated_capacity;
+			size_t table_start = 0;
+			uint32_t allocated_capacity = 0;
 		};
 
 		struct free_table_entry {

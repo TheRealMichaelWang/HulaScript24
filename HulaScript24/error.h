@@ -14,11 +14,10 @@ namespace HulaScript::Runtime {
 
 	class error {
 	public:
-		etype type;
-
-		error(error::etype type, std::string message, uint32_t ip) : type(type), msg(msg), ip(ip) { }
+		error(error::etype type, std::string message, uint32_t ip) : type(type), msg(message), ip(ip) { }
 		error(etype type, uint32_t ip) : type(type), msg(std::nullopt), ip(ip) { }
 	private:
+		etype type;
 		std::optional<std::string> msg;
 		uint32_t ip;
 	};
@@ -50,12 +49,12 @@ namespace HulaScript::Compilation {
 
 	class error {
 	public: 
-		etype type;
-
 		error(etype type, source_loc location) : type(type), location(location), msg(std::nullopt) { }
-		error(etype type, std::string message, source_loc location) : type(type), location(location), msg(msg) { }
+
+		error(etype type, std::string message, source_loc location) : type(type), location(location), msg(message) { }
 
 	private:
+		etype type;
 		std::optional<std::string> msg;
 		source_loc location;
 	};
