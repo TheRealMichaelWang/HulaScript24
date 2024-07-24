@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <utility>
+#include <string>
 
 namespace HulaScript::Runtime {
 	enum vtype {
@@ -43,11 +44,9 @@ namespace HulaScript::Runtime {
 			return std::make_pair(func_id, data.table_id);
 		}
 
-		/*const bool is_gc_type() const {
-			return _type >= vtype::TABLE;
-		}*/
-
 		const uint64_t compute_hash();
+
+		std::string to_print_string();
 	private:
 		vtype _type;
 

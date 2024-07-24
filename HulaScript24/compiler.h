@@ -57,8 +57,8 @@ namespace HulaScript::Compilation {
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
 
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool expects_statement);
-		std::optional<error> compile_expression(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, int min_prec);
+		std::optional<error> compile_value(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool expects_statement, bool repl_mode);
+		std::optional<error> compile_expression(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, int min_prec, bool repl_mode);
 		std::optional<error> compile_statement(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool repl_mode);
 		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section);
 		std::optional<error> compile_block(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_function_section, std::vector<instruction>& function_section, bool(*stop_cond)(token_type));
