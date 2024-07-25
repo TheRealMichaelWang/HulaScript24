@@ -63,7 +63,7 @@ namespace HulaScript::Compilation {
 		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section);
 		std::optional<error> compile_block(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_function_section, std::vector<instruction>& function_section, bool(*stop_cond)(token_type));
 
-		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins);
+		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins, bool pop_scope);
 		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions);
 
 		std::optional<error> validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc);

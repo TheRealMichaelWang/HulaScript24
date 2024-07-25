@@ -6,6 +6,7 @@
 int main() {
 	HulaScript::repl_instance instance("myInstance", 1024, 64, 1024);
 
+	std::cout << ">>> ";
 	for (;;) {
 		std::string line;
 		std::getline(std::cin, line);
@@ -28,6 +29,10 @@ int main() {
 				HulaScript::Runtime::value result = std::get<HulaScript::Runtime::value>(run_res);
 				std::cout << result.to_print_string() << std::endl;
 			}
+			std::cout << ">>> ";
+		}
+		else {
+			std::cout << "... ";
 		}
 	}
 

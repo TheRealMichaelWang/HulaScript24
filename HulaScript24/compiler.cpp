@@ -108,6 +108,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 				};
 				active_variables.insert({ id, sym });
 				func_decl_stack.back().max_locals++;
+
+				if (func_decl_stack.size() == 1) {
+					
+				}
 					
 				current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
 				if (!expects_statement)
@@ -525,17 +529,17 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
 		UNWRAP_AND_HANDLE(compile_statement(tokenizer, target_instance, func_instructions, function_section, false), {
-			unwind_locals(func_instructions, false);
+			unwind_locals(func_instructions, false, true);
 			func_decl_stack.pop_back();
 			target_instance.recycle_function_id(func_id);
 		});
 	}
 	MATCH_AND_SCAN_AND_HANDLE(token_type::END_BLOCK, {
-		unwind_locals(func_instructions, false);
+		unwind_locals(func_instructions, false, true);
 		func_decl_stack.pop_back();
 		target_instance.recycle_function_id(func_id);
 	});
-	unwind_locals(func_instructions, false);
+	unwind_locals(func_instructions, false, true);
 	{
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
 		function_section.insert(function_section.begin() + function_section.size(), func_instructions.begin(), func_instructions.end());
@@ -570,7 +574,8 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 }
 
 std::optional<error> compiler::compile(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& repl_section, std::vector<instruction>& function_section, bool repl_mode) {
-	
+	std::vector<std::string> decled_globals;
+	std::vector<std::string> decled_toplvl_locals;
 	while (!repl_stop_parsing && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
 		token& token = tokenizer.last_token();
@@ -618,8 +623,12 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, instance& target_in
 			};
 			active_variables.insert({ id, sym });
 			max_globals++;
+			decled_globals.push_back(id);
 
-			UNWRAP(compile_function(id, tokenizer, target_instance, repl_section, function_section));
+			UNWRAP_AND_HANDLE(compile_function(id, tokenizer, target_instance, repl_section, function_section), {
+				active_variables.erase(id);
+				max_globals--;
+			});
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
 			break;
 		}
@@ -648,18 +657,19 @@ std::optional<error> compiler::compile_block(tokenizer& tokenizer, instance& tar
 	}
 	
 unwind_and_return:
-	unwind_locals(current_section, true);
+	unwind_locals(current_section, true, true);
 	return to_return;
 }
 
-void compiler::unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins) {
+void compiler::unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins, bool pop_scope) {
 	if (use_unwind_ins && scope_stack.back().symbol_names.size() > 0) {
 		instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
 	}
 	for (std::string symbol : scope_stack.back().symbol_names) {
 		active_variables.erase(symbol);
 	}
-	scope_stack.pop_back();
+	if(pop_scope)
+		scope_stack.pop_back();
 }
 
 void compiler::unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions) {
