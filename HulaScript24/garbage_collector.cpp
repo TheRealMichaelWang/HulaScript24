@@ -10,20 +10,20 @@
 using namespace HulaScript::Runtime;
 
 std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t element_count) {
-	auto free_table_it = free_tables.lower_bound({ .allocated_capacity = element_count });
+	auto free_table_it = free_tables.lower_bound(element_count);
 	if (free_table_it != free_tables.end()) {
 		table_entry new_entry = {
-			.table_start = free_table_it->table_start,
+			.table_start = free_table_it->second.table_start,
 			.allocated_capacity = element_count
 		};
-		uint32_t unused_elem_count = free_table_it->allocated_capacity - element_count;
+		uint32_t unused_elem_count = free_table_it->second.allocated_capacity - element_count;
 		free_tables.erase(free_table_it);
 
 		if (unused_elem_count > 0) {
-			free_tables.insert({
+			free_tables.insert({ unused_elem_count, {
 				.table_start = new_entry.table_start + new_entry.allocated_capacity,
 				.allocated_capacity = unused_elem_count
-			});
+			}});
 		}
 
 		return std::make_optional(new_entry);
@@ -77,16 +77,15 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 		if (!alloc_res.has_value())
 			return false;
 
-		size_t old_start = entry.table_start;
-		uint32_t old_len = entry.used_elems;
+		table_entry old_entry = entry;
 		entry = alloc_res.value();
-		std::memmove(&table_elems[entry.table_start], &table_elems[old_start], old_len);
-		entry.used_elems = old_len;
+		std::memmove(&table_elems[entry.table_start], &table_elems[old_entry.table_start], old_entry.used_elems);
+		entry.used_elems = old_entry.used_elems;
 
-		free_tables.insert({
-			.table_start = entry.table_start,
-			.allocated_capacity = entry.allocated_capacity
-		});
+		free_tables.insert({ old_entry.allocated_capacity, {
+			.table_start = old_entry.table_start,
+			.allocated_capacity = old_entry.allocated_capacity
+		} });
 		return true;
 	}
 	else if(element_count < entry.allocated_capacity) {
@@ -95,10 +94,11 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 			.allocated_capacity = element_count
 		};
 
-		free_tables.insert({
+		uint32_t free_capacity = entry.allocated_capacity - element_count;
+		free_tables.insert({ free_capacity, {
 			.table_start = entry.table_start + element_count,
-			.allocated_capacity = entry.allocated_capacity - element_count
-		});
+			.allocated_capacity = free_capacity
+		} });
 		return true;
 	}
 	else
@@ -117,10 +117,12 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uin
 }
 
 void instance::garbage_collect(gc_collection_mode mode) {
+
+
 #define PUSH_TRACE(TO_TRACE) switch(TO_TRACE.type()) { case vtype::TABLE: tables_to_mark.push(TO_TRACE.table_id()); break;\
 														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
 														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
-														marked_functions.insert(closure_info.first); tables_to_mark.push(closure_info.second); break; } }
+														functions_to_mark.push(closure_info.first); tables_to_mark.push(closure_info.second); break; } }
 
 
 	/*{ if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.table_id()); }\
@@ -129,11 +131,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
-
-	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
-		return function_entries[a].start_address < function_entries[b].start_address;
-	};
-	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
+	std::queue<uint32_t> functions_to_mark;
 
 	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
 		PUSH_TRACE(local_elems[i]);
@@ -184,27 +182,31 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			case vtype::CLOSURE:
 			{
 				auto closure_info = val.closure();
-				std::queue<uint32_t> functions_to_mark;
 				functions_to_mark.push(closure_info.first);
 				tables_to_mark.push(closure_info.second);
-				while (!functions_to_mark.empty()) {
-					uint32_t id = functions_to_mark.front();
-					functions_to_mark.pop();
-
-					if (marked_functions.contains(id)) {
-						continue;
-					}
-					marked_functions.insert(id);
-					for (char* refed_str : function_entries[id].referenced_const_strs) {
-						marked_strs.insert(refed_str);
-					}
-					for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
-						functions_to_mark.push(refed_function);
-					}
-				}
 				break;
 			}
 			}
+		}
+	}
+
+	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
+		return function_entries[a].start_address < function_entries[b].start_address;
+		};
+	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
+	while (!functions_to_mark.empty()) {
+		uint32_t id = functions_to_mark.front();
+		functions_to_mark.pop();
+
+		if (marked_functions.contains(id)) {
+			continue;
+		}
+		marked_functions.insert(id);
+		for (char* refed_str : function_entries[id].referenced_const_strs) {
+			marked_strs.insert(refed_str);
+		}
+		for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
+			functions_to_mark.push(refed_function);
 		}
 	}
 
@@ -248,8 +250,10 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	for (uint64_t id : sorted_marked) {
 		instance::table_entry entry = table_entries[id];
 
-		if (entry.table_start == new_table_offset)
+		if (entry.table_start == new_table_offset) {
+			new_table_offset += entry.used_elems;
 			continue;
+		}
 
 		std::memmove(&table_elems[entry.table_start], &table_elems[new_table_offset], entry.used_elems);
 

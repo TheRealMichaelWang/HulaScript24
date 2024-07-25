@@ -312,7 +312,7 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 					break;
 				case opcode::LOAD_CONSTANT: {
 					value& constant = constants[instructions[end_addr].operand];
-					if (constant.type() == vtype::CLOSURE)
+					if (constant.type() == vtype::STRING)
 						entry.referenced_const_strs.insert(constant.str());
 					break;
 				}

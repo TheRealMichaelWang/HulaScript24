@@ -82,14 +82,16 @@ namespace HulaScript::Runtime {
 
 		std::map<uint64_t, uint32_t> id_global_map;
 		std::vector<instruction> _function_section;
-		std::map<uint32_t, loaded_function_entry> function_entries;
 		std::queue<uint32_t> available_function_ids;
 		uint32_t max_function_id;
 		
+		std::map<uint32_t, loaded_function_entry> function_entries;
+		std::map<uint32_t, Compilation::source_loc> function_src_locs;
+
 		std::map<uint64_t, table_entry> table_entries;
 		std::queue<uint64_t> available_table_ids;
 		uint64_t max_table_id;
-		std::set<free_table_entry, bool(*)(free_table_entry, free_table_entry)> free_tables;
+		std::map<uint32_t, free_table_entry> free_tables;
 		std::set<char*> active_strs;
 
 		error type_error(vtype expected, vtype got, uint32_t ip);

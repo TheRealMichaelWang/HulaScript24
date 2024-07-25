@@ -11,8 +11,7 @@ instance::instance(uint32_t max_locals, uint32_t max_globals, size_t max_table) 
 	max_table_id(0), max_function_id(0),
 	local_elems((value*)malloc(max_locals * sizeof(value))),
 	global_elems((value*)malloc(max_globals * sizeof(value))),
-	table_elems((value*)malloc(max_table * sizeof(value))),
-	free_tables([](free_table_entry a, free_table_entry b) -> bool { return a.allocated_capacity < b.allocated_capacity; })
+	table_elems((value*)malloc(max_table * sizeof(value)))
 {
 	assert(local_elems != NULL);
 	assert(global_elems != NULL);
@@ -53,11 +52,13 @@ uint32_t instance::add_constant(value constant) {
 			char* to_store = strdup(constant.str());
 			assert(to_store != NULL);
 			active_strs.insert(to_store);
-			constants.push_back(value(to_store));
+			constant = value(to_store);
 		}
-		else {
+		if (id == constants.size())
 			constants.push_back(constant);
-		}
+		else
+			constants[id] = constant;
+
 		added_constant_hashes.insert({ hash, id });
 		return id;
 	}

@@ -64,6 +64,9 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 				}
 				
 				current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
+				if (expects_statement) {
+					current_section.push_back({ .op = opcode::DISCARD_TOP });
+				}
 				return std::nullopt;
 			}
 			else {
@@ -256,6 +259,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false));
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
+				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
 			}
 			else {
@@ -273,6 +277,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, target_instance, current_section, function_section, 0, false));
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
+				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
 			}
 			else {
@@ -321,8 +326,13 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, instance& tar
 		}
 		default:
 		return_immediatley:
-			if (expects_statement && !is_statement) {
-				return error(etype::UNEXPECTED_VALUE, "Expected statement, but got value instead.", begin_loc);
+			if (expects_statement) {
+				if (is_statement) {
+					current_section.push_back({ .op = opcode::DISCARD_TOP });
+				}
+				else {
+					return error(etype::UNEXPECTED_VALUE, "Expected statement, but got value instead.", begin_loc);
+				}
 			}
 			return std::nullopt;
 		}
@@ -468,7 +478,6 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, instance&
 		}
 		else {
 			UNWRAP(compile_value(tokenizer, target_instance, current_section, function_section, true, false));
-			current_section.push_back({ .op = opcode::DISCARD_TOP });
 		}
 		return std::nullopt;
 	}
@@ -539,7 +548,9 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			
 			auto var_it = active_variables.find(captured_var);
 			uint32_t prop_str_id = target_instance.make_string(captured_var);
-			if (var_it->second.func_id < func_decl_stack.size() - 1) { //this is a captured 
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
+
+			if (var_it->second.func_id < func_decl_stack.size() - 2) { //this is a captured 
 				current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table
 				current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id});
 				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
@@ -548,7 +559,6 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 				current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = var_it->second.local_id });
 			}
 
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
 			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 			current_section.push_back({ .op = opcode::DISCARD_TOP });
 		}
@@ -587,6 +597,11 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, instance& target_in
 			max_globals++;
 
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
+
+			if (repl_mode) {
+				repl_section.push_back({ .op = opcode::LOAD_GLOBAL, .operand = sym.local_id });
+				repl_stop_parsing = true;
+			}
 			break;
 		}
 		case token_type::FUNCTION: {
