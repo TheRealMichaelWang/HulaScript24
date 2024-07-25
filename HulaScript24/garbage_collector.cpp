@@ -79,7 +79,7 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 
 		table_entry old_entry = entry;
 		entry = alloc_res.value();
-		std::memmove(&table_elems[entry.table_start], &table_elems[old_entry.table_start], old_entry.used_elems);
+		std::memmove(&table_elems[entry.table_start], &table_elems[old_entry.table_start], old_entry.used_elems * sizeof(value));
 		entry.used_elems = old_entry.used_elems;
 
 		free_tables.insert({ old_entry.allocated_capacity, {
@@ -248,16 +248,16 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	});
 	size_t new_table_offset = 0;
 	for (uint64_t id : sorted_marked) {
-		instance::table_entry entry = table_entries[id];
+		instance::table_entry& entry = table_entries[id];
 
 		if (entry.table_start == new_table_offset) {
 			new_table_offset += entry.used_elems;
 			continue;
 		}
 
-		std::memmove(&table_elems[entry.table_start], &table_elems[new_table_offset], entry.used_elems);
+		std::memmove(&table_elems[new_table_offset], &table_elems[entry.table_start], entry.used_elems * sizeof(value));
 
-		table_entries[id].table_start = new_table_offset;
+		entry.table_start = new_table_offset;
 		new_table_offset += entry.used_elems;
 	}
 	table_offset = new_table_offset;
