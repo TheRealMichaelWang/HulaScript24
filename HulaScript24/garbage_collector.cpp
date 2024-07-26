@@ -31,7 +31,7 @@ std::optional<instance::gc_block> instance::allocate_block(uint32_t element_coun
 
 	if (table_offset + element_count > max_table) {
 		garbage_collect(gc_collection_mode::STANDARD);
-		if (table_offset + element_count)
+		if ((table_offset + element_count) > max_table)
 			return std::nullopt; //out of memory cannot allocate table
 	}
 

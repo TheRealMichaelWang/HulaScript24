@@ -43,10 +43,10 @@ compiler::compiler(instance& target_instance, bool report_src_locs) : max_global
 #define IF_AND_SCAN(TOK) if(tokenizer.last_tok().type == TOK) { SCAN }
 
 std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, bool expects_statement, bool repl_mode) {
-	token& token = tokenizer.last_token();
-	source_loc& begin_loc = tokenizer.last_token_loc();
+	token token = tokenizer.last_token();
+	source_loc loc = tokenizer.last_token_loc();
 
-	ip_src_map.insert({ (uint32_t)current_section.size(), begin_loc });
+	ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 	switch (token.type)
 	{
 	case token_type::IDENTIFIER: {
@@ -62,7 +62,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
 					std::stringstream ss;
 					ss << "Cannot set captured variable " << id << ", which was declared in " << func_decl_stack[local_it->second.func_id].name << ", not the current " << func_decl_stack.back().name << '.';
-					return error(etype::CANNOT_SET_CAPTURED, ss.str(), begin_loc);
+					return error(etype::CANNOT_SET_CAPTURED, ss.str(), loc);
 				}
 				
 				current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
@@ -123,7 +123,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			else {
 				std::stringstream ss;
 				ss << "Symbol " << id << " does not exist.";
-				return error(etype::SYMBOL_NOT_FOUND, ss.str(), begin_loc);
+				return error(etype::SYMBOL_NOT_FOUND, ss.str(), loc);
 			}
 		}
 	}
@@ -173,6 +173,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		}
 		else {
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+			ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 			current_section.push_back({ .op = opcode::ALLOCATE_DYN });
 		}
 		MATCH_AND_SCAN(token_type::OPEN_BRACKET);
@@ -189,8 +190,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			current_section.push_back({ .op = opcode::PUSH_SCRATCHPAD });
 			length++;
 		}
+		loc = tokenizer.last_token_loc();
 		MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
 
+		ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
 		for (uint_fast32_t i = length; i >= 1; i--) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
@@ -220,8 +223,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			MATCH_AND_SCAN(token_type::CLOSE_BRACE);
 			length++;
 		}
+		loc = tokenizer.last_token_loc();
 		MATCH_AND_SCAN(token_type::CLOSE_BRACE);
 
+		ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 		current_section.push_back({ .op = opcode::REVERSE_SCRATCHPAD });
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
 		for (uint_fast32_t i = 0; i < length; i++) {
@@ -252,6 +257,8 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 	bool is_statement = false;
 	for (;;) {
 		token = tokenizer.last_token();
+		loc = tokenizer.last_token_loc();
+
 		switch (token.type)
 		{
 		case token_type::PERIOD:
@@ -262,8 +269,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			SCAN;
 
 			if (tokenizer.match_last(token_type::SET)) {
+				loc = tokenizer.last_token_loc();
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
@@ -280,13 +289,16 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
 
 			if (tokenizer.match_last(token_type::SET)) {
+				loc = tokenizer.last_token_loc();
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
 			}
 			else {
+				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				is_statement = false;
 			}
@@ -307,6 +319,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			}
 			MATCH_AND_SCAN(token_type::CLOSE_PAREN);
 
+			ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 			current_section.push_back({ .op = opcode::CALL, .operand = length });
 			is_statement = true;
@@ -337,7 +350,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 					current_section.push_back({ .op = opcode::DISCARD_TOP });
 				}
 				else {
-					return error(etype::UNEXPECTED_VALUE, "Expected statement, but got value instead.", begin_loc);
+					return error(etype::UNEXPECTED_VALUE, "Expected statement, but got value instead.", loc);
 				}
 			}
 			return std::nullopt;

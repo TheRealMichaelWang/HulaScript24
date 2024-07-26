@@ -68,13 +68,11 @@ uint32_t instance::add_constant(value constant) {
 
 error instance::type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip) {
 	static const char* type_names[] = {
-		"dictionary",
-		"closure",
-		"object/class",
-		"array",
-		"string",
+		"nil",
 		"number",
-		"nil"
+		"string",
+		"table",
+		"closure"
 	};
 
 	std::stringstream ss;
