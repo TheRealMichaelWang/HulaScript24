@@ -6,7 +6,7 @@
 
 using namespace HulaScript::Compilation;
 
-tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source), source(source), file_source(file_source), pos(0), last_tok(token_type::END_OF_SOURCE) {
+tokenizer::tokenizer(std::string source, std::optional<std::string> file_source) : current_row(1), current_col(0), next_row(1), next_col(1), token_begin(file_source, std::nullopt), source(source), file_source(file_source), pos(0), last_tok(token_type::END_OF_SOURCE), current_function_name(std::nullopt) {
 	scan_char();
 	scan_token();
 }
@@ -101,7 +101,7 @@ std::variant<token, error> tokenizer::scan_token() {
 		scan_char();
 	}
 
-	token_begin = source_loc(current_row, current_col, file_source);
+	token_begin = source_loc(current_row, current_col, file_source, current_function_name);
 
 	if (isalpha(last_char)) { //parse identifier
 		std::stringstream identifier_ss;

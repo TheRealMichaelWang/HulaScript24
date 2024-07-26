@@ -285,6 +285,10 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				continue;
 			}
 
+			for (auto it = ip_src_locs.lower_bound(entry.start_address); it != ip_src_locs.lower_bound(entry.start_address + entry.length);) {
+				it = ip_src_locs.erase(it);
+			}
+
 			auto start_it = loaded_instructions.begin() + entry.start_address;
 			std::move(start_it, start_it + entry.length, loaded_instructions.begin() + current_ip);
 

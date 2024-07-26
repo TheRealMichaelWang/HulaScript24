@@ -9,19 +9,21 @@ std::variant<value, error> instance::execute() {
 	instruction* instructions = loaded_instructions.data();
 	uint_fast32_t ip = start_ip;
 
+#define LOAD_SRC_LOC(RESULT, IP) std::optional<source_loc> RESULT = std::nullopt;\
+								{ auto RESULT##_it = ip_src_locs.upper_bound(IP);\
+								if(RESULT##_it != ip_src_locs.begin()) {\
+									RESULT##_it--;\
+									RESULT = RESULT##_it->second;\
+								} }
+
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
-														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
+														LOAD_SRC_LOC(src_loc, ip);\
+														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), src_loc, ip);\
 														goto stop_exec;\
 													}\
 
-#define NORMALIZE_ARRAY_INDEX(NUMERICAL_IND, LENGTH)	int32_t index = floor(NUMERICAL_IND.number());\
-														if(index >= LENGTH || -index >= LENGTH) {\
-															current_error = index_error(NUMERICAL_IND.number(), index, LENGTH, ip);\
-															goto stop_exec;\
-														}\
-	
 	std::optional<error> current_error = std::nullopt;
 	while (ip != loaded_instructions.size())
 	{
@@ -218,7 +220,8 @@ std::variant<value, error> instance::execute() {
 				if (table_entry.used_elems == table_entry.allocated_capacity) {
 					if (!reallocate_table(table_val.table_id(), 4, 1))
 					{
-						current_error = error(etype::MEMORY, "Failed to add to table.", ip);
+						LOAD_SRC_LOC(src_loc, ip);
+						current_error = error(etype::MEMORY, "Failed to add to table.", src_loc, ip);
 						goto stop_exec;
 					}
 				}
@@ -247,7 +250,8 @@ std::variant<value, error> instance::execute() {
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				current_error = error(etype::MEMORY, ss.str(), ip);
+				LOAD_SRC_LOC(src_loc, ip);
+				current_error = error(etype::MEMORY, ss.str(), src_loc, ip);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -258,7 +262,8 @@ std::variant<value, error> instance::execute() {
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				current_error = error(etype::MEMORY, ss.str(), ip);
+				LOAD_SRC_LOC(src_loc, ip);
+				current_error = error(etype::MEMORY, ss.str(), src_loc, ip);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -314,7 +319,8 @@ std::variant<value, error> instance::execute() {
 				if (end_addr == loaded_instructions.size()) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					current_error = error(etype::INTERNAL_ERROR, ss.str(), end_addr);
+					LOAD_SRC_LOC(src_loc, ip);
+					current_error = error(etype::INTERNAL_ERROR, src_loc, end_addr);
 					goto stop_exec;
 				}
 			} while (instructions[end_addr].op != opcode::FUNCTION_END);
@@ -351,9 +357,15 @@ std::variant<value, error> instance::execute() {
 
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
 				std::stringstream ss;
+				ss << "Function";
+				LOAD_SRC_LOC(func_loc, fn_entry.start_address);
+				if (func_loc.has_value()) {
+					ss << ", at " << func_loc.value().to_print_string() << ',';
+				}
 
-				ss << "Function expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
+				ss << " expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
+				LOAD_SRC_LOC(src_loc, ip);
+				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), src_loc, ip);
 				goto stop_exec;
 			}
 
@@ -375,12 +387,12 @@ std::variant<value, error> instance::execute() {
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
+			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", std::nullopt, ip);
 			goto stop_exec;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			current_error = error(etype::INTERNAL_ERROR, ss.str(), ip);
+			current_error = error(etype::INTERNAL_ERROR, ss.str(), std::nullopt, ip);
 			goto stop_exec;
 		}
 		}

@@ -106,6 +106,8 @@ namespace HulaScript::Compilation {
 		std::optional<error> match(token_type expected);
 
 		error make_unexpected_tok_err(std::optional<token_type> expected);
+
+		std::optional<std::string> current_function_name;
 	private:
 		size_t current_row;
 		size_t current_col;

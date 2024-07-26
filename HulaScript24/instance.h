@@ -78,7 +78,7 @@ namespace HulaScript::Runtime {
 		uint32_t max_function_id;
 		
 		std::map<uint32_t, loaded_function_entry> function_entries;
-		std::map<uint32_t, Compilation::source_loc> function_src_locs;
+		std::map<uint32_t, source_loc> ip_src_locs;
 
 		std::map<uint64_t, table_entry> table_entries;
 		std::queue<uint64_t> available_table_ids;
@@ -86,8 +86,7 @@ namespace HulaScript::Runtime {
 		std::map<uint32_t, gc_block> free_tables;
 		std::set<char*> active_strs;
 
-		static error type_error(vtype expected, vtype got, uint32_t ip);
-		static error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);
+		static error type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip);
 
 		std::optional<gc_block> allocate_block(uint32_t element_count);
 		std::optional<uint64_t> allocate_table(uint32_t element_count);

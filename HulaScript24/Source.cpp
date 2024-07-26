@@ -19,11 +19,11 @@ int main() {
 			auto run_res = instance.run();
 			if (std::holds_alternative<HulaScript::Runtime::error>(run_res)) {
 				auto runtime_err = std::get<HulaScript::Runtime::error>(run_res);
-				
+				std::cout << runtime_err.to_print_string() << std::endl;
 			}
 			else if (std::holds_alternative<HulaScript::Compilation::error>(run_res)) {
 				auto compilation_err = std::get<HulaScript::Compilation::error>(run_res);
-
+				std::cout << compilation_err.to_print_string() << std::endl;
 			}
 			else {
 				HulaScript::Runtime::value result = std::get<HulaScript::Runtime::value>(run_res);

@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <cassert>
+#include <sstream>
 #include "hash.h"
 #include "instance.h"
 
@@ -63,4 +64,21 @@ uint32_t instance::add_constant(value constant) {
 		return id;
 	}
 	return it->second;
+}
+
+error instance::type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip) {
+	static const char* type_names[] = {
+		"dictionary",
+		"closure",
+		"object/class",
+		"array",
+		"string",
+		"number",
+		"nil"
+	};
+
+	std::stringstream ss;
+	ss << "Expected type " << type_names[expected] << " but got " << type_names[got] << " instead.";
+
+	return error(etype::UNEXPECTED_TYPE, ss.str(), location, ip);
 }
