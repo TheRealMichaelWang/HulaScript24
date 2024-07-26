@@ -13,9 +13,9 @@
 namespace HulaScript::Compilation {
 	class compiler {
 	public:
-		compiler();
+		compiler(HulaScript::Runtime::instance& instance);
 
-		std::optional<error> compile(tokenizer& tokenizer, HulaScript::Runtime::instance& target_instance, std::vector<HulaScript::Runtime::instruction>& repl_section, std::vector<HulaScript::Runtime::instruction>& function_section, bool repl_mode);
+		std::optional<error> compile(tokenizer& tokenizer, bool repl_mode);
 	private:
 		typedef HulaScript::Runtime::instance instance;
 		typedef HulaScript::Runtime::instruction instruction;
@@ -57,14 +57,21 @@ namespace HulaScript::Compilation {
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
 
-		std::optional<error> compile_value(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool expects_statement, bool repl_mode);
-		std::optional<error> compile_expression(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, int min_prec, bool repl_mode);
-		std::optional<error> compile_statement(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section, bool repl_mode);
-		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_section, std::vector<instruction>& function_section);
-		std::optional<error> compile_block(tokenizer& tokenizer, instance& target_instance, std::vector<instruction>& current_function_section, std::vector<instruction>& function_section, bool(*stop_cond)(token_type));
+		std::vector<std::string> decled_toplvl_locals; //locals declared DURING the compilation session; cleared afterwards
+		std::vector<std::string> decled_globals; //globals declared DURING the compilation session; cleared afterwards
+		uint32_t max_instruction;
 
-		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins, bool pop_scope);
+		instance& target_instance;
+
+		std::optional<error> compile_value(tokenizer& tokenizer, std::vector<instruction>& current_section, bool expects_statement, bool repl_mode);
+		std::optional<error> compile_expression(tokenizer& tokenizer, std::vector<instruction>& current_section, int min_prec, bool repl_mode);
+		std::optional<error> compile_statement(tokenizer& tokenizer, std::vector<instruction>& current_section, bool repl_mode);
+		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section);
+		std::optional<error> compile_block(tokenizer& tokenizer, std::vector<instruction>& current_section, bool(*stop_cond)(token_type));
+
+		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins);
 		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions);
+		void unwind_error();
 
 		std::optional<error> validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc);
 	};

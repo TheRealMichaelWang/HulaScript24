@@ -9,7 +9,7 @@
 namespace HulaScript {
 	class repl_instance {
 	public:
-		repl_instance(std::optional<std::string> name, uint32_t max_locals, uint32_t max_globals, size_t max_table) : name(name), instance(max_locals, max_globals, max_table){ }
+		repl_instance(std::optional<std::string> name, uint32_t max_locals, uint32_t max_globals, size_t max_table) : name(name), instance(max_locals, max_globals, max_table), compiler(instance){ }
 
 		//input is a piece of the source. The function will return when the source is complete enough for evaluation
 		std::variant<bool, Compilation::error> write_input(std::string input);

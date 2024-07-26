@@ -54,16 +54,14 @@ std::variant<bool, Compilation::error> repl_instance::write_input(std::string in
 std::variant<Runtime::value, Runtime::error, Compilation::error> repl_instance::run() {
 	Compilation::tokenizer tokenizer(input_builder.str(), name);
 
-	std::vector<Runtime::instruction> repl_section;
-	auto compile_res = compiler.compile(tokenizer, instance, repl_section, instance.function_section(), true);
+	auto compile_res = compiler.compile(tokenizer, true);
 	input_builder.str(std::string());
 	input_builder.clear();
-		
 	if (compile_res.has_value()) {
 		return compile_res.value();
 	}
 
-	auto run_res = instance.execute(repl_section);
+	auto run_res = instance.execute();
 	if (std::holds_alternative<Runtime::error>(run_res)) {
 		return std::get<Runtime::error>(run_res);
 	}

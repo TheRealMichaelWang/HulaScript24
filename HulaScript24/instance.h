@@ -13,6 +13,10 @@
 #include "value.h"
 #include "instructions.h"
 
+namespace HulaScript::Compilation {
+	class compiler;
+}
+
 namespace HulaScript::Runtime {
 	class instance {
 	public:
@@ -22,19 +26,7 @@ namespace HulaScript::Runtime {
 		uint32_t make_string(const char* str);
 		uint32_t make_string(std::string str);
 
-		uint32_t add_constant(value constant);
-
-		uint32_t emit_function_start(std::vector<instruction>& instructions);
-
-		void recycle_function_id(uint32_t func_id) {
-			available_function_ids.push(func_id);
-		}
-
-		std::vector<instruction>& function_section() {
-			return _function_section;
-		}
-
-		std::variant<value, error> execute(const std::vector<instruction>& new_instructions);
+		std::variant<value, error> execute();
 	private:
 		enum gc_collection_mode {
 			STANDARD = 0,
@@ -50,7 +42,7 @@ namespace HulaScript::Runtime {
 			uint32_t allocated_capacity = 0;
 		};
 
-		struct free_table_entry {
+		struct gc_block {
 			size_t table_start;
 			uint32_t allocated_capacity;
 		};
@@ -81,7 +73,7 @@ namespace HulaScript::Runtime {
 		size_t table_offset, max_table;
 
 		std::map<uint64_t, uint32_t> id_global_map;
-		std::vector<instruction> _function_section;
+		std::vector<instruction> loaded_instructions;
 		std::queue<uint32_t> available_function_ids;
 		uint32_t max_function_id;
 		
@@ -91,17 +83,22 @@ namespace HulaScript::Runtime {
 		std::map<uint64_t, table_entry> table_entries;
 		std::queue<uint64_t> available_table_ids;
 		uint64_t max_table_id;
-		std::map<uint32_t, free_table_entry> free_tables;
+		std::map<uint32_t, gc_block> free_tables;
 		std::set<char*> active_strs;
 
-		error type_error(vtype expected, vtype got, uint32_t ip);
-		error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);
+		static error type_error(vtype expected, vtype got, uint32_t ip);
+		static error index_error(double number_index, uint32_t index, uint32_t length, uint32_t ip);
 
-		std::optional<table_entry> allocate_table_no_id(uint32_t element_count);
+		std::optional<gc_block> allocate_block(uint32_t element_count);
 		std::optional<uint64_t> allocate_table(uint32_t element_count);
 		bool reallocate_table(uint64_t table, uint32_t element_count);
 		bool reallocate_table(uint64_t table, uint32_t max_elem_extend, uint32_t min_elem_extend);
 
 		void garbage_collect(gc_collection_mode mode);
+
+		uint32_t emit_function_start(std::vector<instruction>& instructions);
+		uint32_t add_constant(value constant);
+
+		friend class HulaScript::Compilation::compiler;
 	};
 }

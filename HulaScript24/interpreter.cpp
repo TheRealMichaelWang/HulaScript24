@@ -5,16 +5,8 @@
 
 using namespace HulaScript::Runtime;
 
-std::variant<value, error> instance::execute(const std::vector<instruction>& new_instructions) {
-	std::vector<instruction> total_instructions;
-	total_instructions.reserve(_function_section.size() + new_instructions.size());
-
-	total_instructions.insert(total_instructions.begin(), _function_section.begin(), _function_section.end());
-	total_instructions.insert(total_instructions.begin() + _function_section.size(), new_instructions.begin(), new_instructions.end());
-
-	instruction* instructions = total_instructions.data();
-	uint_fast32_t instruction_count = (uint_fast32_t)total_instructions.size();
-
+std::variant<value, error> instance::execute() {
+	instruction* instructions = loaded_instructions.data();
 	uint_fast32_t ip = start_ip;
 
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
@@ -31,7 +23,7 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 														}\
 	
 	std::optional<error> current_error = std::nullopt;
-	while (ip != instruction_count)
+	while (ip != loaded_instructions.size())
 	{
 		instruction& ins = instructions[ip];
 
@@ -319,7 +311,7 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 				}
 
 				end_addr++;
-				if (instruction_count == end_addr) {
+				if (end_addr == loaded_instructions.size()) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
 					current_error = error(etype::INTERNAL_ERROR, ss.str(), end_addr);
@@ -403,12 +395,12 @@ std::variant<value, error> instance::execute(const std::vector<instruction>& new
 stop_exec:
 	if (current_error.has_value()) {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
-		start_ip = _function_section.size();
+		start_ip = (uint32_t)loaded_instructions.size();
 		return current_error.value();
 	}
 	else {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
-		start_ip = _function_section.size();
+		start_ip = (uint32_t)loaded_instructions.size();
 		assert(evaluation_stack.size() == 1);
 		value to_return = evaluation_stack.back();
 		evaluation_stack.pop_back();

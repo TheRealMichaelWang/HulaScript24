@@ -9,10 +9,10 @@
 
 using namespace HulaScript::Runtime;
 
-std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t element_count) {
+std::optional<instance::gc_block> instance::allocate_block(uint32_t element_count) {
 	auto free_table_it = free_tables.lower_bound(element_count);
 	if (free_table_it != free_tables.end()) {
-		table_entry new_entry = {
+		gc_block new_entry = {
 			.table_start = free_table_it->second.table_start,
 			.allocated_capacity = element_count
 		};
@@ -35,7 +35,7 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 			return std::nullopt; //out of memory cannot allocate table
 	}
 
-	table_entry new_entry = {
+	gc_block new_entry = {
 		.table_start = table_offset, //table_start,
 		.allocated_capacity = element_count //length
 	};
@@ -46,7 +46,7 @@ std::optional<instance::table_entry> instance::allocate_table_no_id(uint32_t ele
 
 //elements are initialized by default to nil
 std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
-	std::optional<table_entry> res = allocate_table_no_id(element_count);
+	std::optional<gc_block> res = allocate_block(element_count);
 	if (!res.has_value())
 		return std::nullopt;
 
@@ -59,8 +59,11 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 		available_table_ids.pop();
 	}
 	
-	table_entry table_entry = res.value();
-	table_entry.used_elems = 0;
+	table_entry table_entry = {
+		.used_elems = 0,
+		.table_start = res.value().table_start,
+		.allocated_capacity = res.value().allocated_capacity
+	};
 	table_entries.insert({ id, table_entry });
 	return id;
 }
@@ -73,28 +76,26 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 	table_entry& entry = it->second;
 
 	if (element_count > entry.allocated_capacity) { //expand allocation
-		std::optional<table_entry> alloc_res = allocate_table_no_id(element_count);
+		std::optional<gc_block> alloc_res = allocate_block(element_count);
 		if (!alloc_res.has_value())
 			return false;
 
-		table_entry old_entry = entry;
-		entry = alloc_res.value();
-		std::memmove(&table_elems[entry.table_start], &table_elems[old_entry.table_start], old_entry.used_elems * sizeof(value));
-		entry.used_elems = old_entry.used_elems;
+		gc_block alloced_entry = alloc_res.value();
+		std::memmove(&table_elems[alloced_entry.table_start], &table_elems[entry.table_start], entry.used_elems * sizeof(value));
 
-		free_tables.insert({ old_entry.allocated_capacity, {
-			.table_start = old_entry.table_start,
-			.allocated_capacity = old_entry.allocated_capacity
+		free_tables.insert({ entry.allocated_capacity, {
+			.table_start = entry.table_start,
+			.allocated_capacity = entry.allocated_capacity
 		} });
+
+		entry.table_start = alloced_entry.table_start;
+		entry.allocated_capacity = alloced_entry.allocated_capacity;
+
 		return true;
 	}
 	else if(element_count < entry.allocated_capacity) {
-		entry = {
-			.table_start = entry.table_start,
-			.allocated_capacity = element_count
-		};
-
 		uint32_t free_capacity = entry.allocated_capacity - element_count;
+		entry.allocated_capacity = element_count;
 		free_tables.insert({ free_capacity, {
 			.table_start = entry.table_start + element_count,
 			.allocated_capacity = free_capacity
@@ -284,12 +285,12 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				continue;
 			}
 
-			auto start_it = _function_section.begin() + entry.start_address;
-			std::move(start_it, start_it + entry.length, _function_section.begin() + current_ip);
+			auto start_it = loaded_instructions.begin() + entry.start_address;
+			std::move(start_it, start_it + entry.length, loaded_instructions.begin() + current_ip);
 
 			entry.start_address = current_ip;
 			current_ip += entry.length;
 		}
-		_function_section.erase(_function_section.begin() + current_ip, _function_section.end());
+		loaded_instructions.erase(loaded_instructions.begin() + current_ip, loaded_instructions.end());
 	}
 }
