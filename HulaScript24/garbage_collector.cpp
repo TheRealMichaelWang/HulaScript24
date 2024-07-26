@@ -295,6 +295,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			entry.start_address = current_ip;
 			current_ip += entry.length;
 		}
+		for (auto it = ip_src_locs.lower_bound(current_ip); it != ip_src_locs.end();) {
+			it = ip_src_locs.erase(it);
+		}
 		loaded_instructions.erase(loaded_instructions.begin() + current_ip, loaded_instructions.end());
 	}
 }
