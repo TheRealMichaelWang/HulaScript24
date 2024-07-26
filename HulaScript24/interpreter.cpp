@@ -12,13 +12,13 @@ std::variant<value, error> instance::execute() {
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
-														type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
+														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
 														goto stop_exec;\
 													}\
 
 #define NORMALIZE_ARRAY_INDEX(NUMERICAL_IND, LENGTH)	int32_t index = floor(NUMERICAL_IND.number());\
 														if(index >= LENGTH || -index >= LENGTH) {\
-															index_error(NUMERICAL_IND.number(), index, LENGTH, ip);\
+															current_error = index_error(NUMERICAL_IND.number(), index, LENGTH, ip);\
 															goto stop_exec;\
 														}\
 	
