@@ -72,7 +72,6 @@ namespace HulaScript::Runtime {
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, start_ip;
 		size_t table_offset, max_table;
 
-		std::map<uint64_t, uint32_t> id_global_map;
 		std::vector<instruction> loaded_instructions;
 		std::queue<uint32_t> available_function_ids;
 		uint32_t max_function_id;
