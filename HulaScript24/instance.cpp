@@ -16,8 +16,6 @@ instance::instance(uint32_t max_locals, uint32_t max_globals, size_t max_table) 
 	assert(local_elems != NULL);
 	assert(global_elems != NULL);
 	assert(table_elems != NULL);
-
-	active_strs.set_deleted_key(NULL);
 }
 
 instance::~instance() {
@@ -46,8 +44,8 @@ uint32_t instance::add_constant(value constant) {
 		if (available_constant_ids.empty())
 			id = (uint32_t)constants.size();
 		else {
-			id = available_constant_ids.front();
-			available_constant_ids.pop();
+			id = available_constant_ids.back();
+			available_constant_ids.pop_back();
 		}
 
 		if (constant.type() == vtype::STRING) {
