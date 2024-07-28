@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\sparsehash">
+      <UniqueIdentifier>{b81b15c7-caa2-4ee0-9bea-b336fca1c413}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\sparsehash\internal">
+      <UniqueIdentifier>{77a8ee54-98d4-4412-8397-84ba78dd4b5d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="instance.h">
@@ -32,6 +38,42 @@
     </ClInclude>
     <ClInclude Include="value.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\template_util.h">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\type_traits.h">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\internal\densehashtable.h">
+      <Filter>Header Files\sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\internal\hashtable-common.h">
+      <Filter>Header Files\sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\internal\libc_allocator_with_realloc.h">
+      <Filter>Header Files\sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\internal\sparsehashtable.h">
+      <Filter>Header Files\sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\dense_hash_map">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\dense_hash_set">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\sparse_hash_map">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\sparse_hash_set">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\sparsetable">
+      <Filter>Header Files\sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="include\sparsehash\internal\sparseconfig.h">
+      <Filter>Header Files\sparsehash\internal</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

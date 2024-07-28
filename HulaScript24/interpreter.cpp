@@ -193,7 +193,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.table_id()];
+			const table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
@@ -201,7 +201,7 @@ std::variant<value, error> instance::execute() {
 				evaluation_stack.push_back(value());
 			}
 			else {
-				evaluation_stack.push_back(table_elems[table_entry.table_start + it->second]);
+				evaluation_stack.push_back(table_elems[table_entry.block.table_start + it->second]);
 			}
 			goto next_ins;
 		}
@@ -212,12 +212,12 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.table_id()];
+			table_entry& table_entry = table_entries.mutating_get(table_val.table_id());
 			uint64_t hash = key_val.compute_hash();
 
 			auto it = table_entry.hash_to_index.find(hash);
 			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
-				if (table_entry.used_elems == table_entry.allocated_capacity) {
+				if (table_entry.used_elems == table_entry.block.allocated_capacity) {
 					if (!reallocate_table(table_val.table_id(), 4, 1))
 					{
 						LOAD_SRC_LOC(src_loc, ip);
@@ -227,11 +227,11 @@ std::variant<value, error> instance::execute() {
 				}
 
 				table_entry.hash_to_index.insert({ hash, table_entry.used_elems });
-				table_elems[table_entry.table_start + table_entry.used_elems] = store_val;
+				table_elems[table_entry.block.table_start + table_entry.used_elems] = store_val;
 				table_entry.used_elems++;
 			}
 			else { //write to existing value
-				table_elems[table_entry.table_start + it->second] = store_val;
+				table_elems[table_entry.block.table_start + it->second] = store_val;
 			}
 
 			evaluation_stack.push_back(store_val);
@@ -299,18 +299,21 @@ std::variant<value, error> instance::execute() {
 			uint32_t end_addr = ip;
 
 			loaded_function_entry entry = {
-				.start_address = ip + 1,
+				.start_address = ip + 1
 			};
+			std::set<uint32_t> referenced_func_ids;
+			std::set<char*> referenced_strs;
 			do {
 				switch (instructions[end_addr].op)
 				{
 				case opcode::MAKE_CLOSURE:
-					entry.referenced_func_ids.insert(instructions[end_addr].operand);
+					referenced_func_ids.insert(instructions[end_addr].operand);
 					break;
 				case opcode::LOAD_CONSTANT: {
 					value& constant = constants[instructions[end_addr].operand];
-					if (constant.type() == vtype::STRING)
-						entry.referenced_const_strs.insert(constant.str());
+					if (constant.type() == vtype::STRING) {
+						referenced_strs.insert(constant.str());
+					}
 					break;
 				}
 				}
@@ -325,6 +328,10 @@ std::variant<value, error> instance::execute() {
 				}
 			} while (instructions[end_addr].op != opcode::FUNCTION_END);
 
+			entry.referenced_func_ids.reserve(referenced_func_ids.size());
+			entry.referenced_func_ids.insert(entry.referenced_func_ids.begin(), referenced_func_ids.begin(), referenced_func_ids.end());
+			entry.referenced_const_strs.reserve(referenced_strs.size());
+			entry.referenced_const_strs.insert(entry.referenced_const_strs.begin(), referenced_strs.begin(), referenced_strs.end());
 			entry.length = end_addr - ip;
 			ip = end_addr;
 

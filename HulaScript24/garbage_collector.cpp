@@ -31,8 +31,9 @@ std::optional<instance::gc_block> instance::allocate_block(uint32_t element_coun
 
 	if (table_offset + element_count > max_table) {
 		garbage_collect(gc_collection_mode::STANDARD);
-		if ((table_offset + element_count) > max_table)
+		if ((table_offset + element_count) > max_table) {
 			return std::nullopt; //out of memory cannot allocate table
+		}
 	}
 
 	gc_block new_entry = {
@@ -47,57 +48,59 @@ std::optional<instance::gc_block> instance::allocate_block(uint32_t element_coun
 //elements are initialized by default to nil
 std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	std::optional<gc_block> res = allocate_block(element_count);
-	if (!res.has_value())
+	if (!res.has_value()) {
 		return std::nullopt;
+	}
 
 	uint64_t id;
-	if (available_table_ids.empty())
-		id = max_table_id++;
-	else 
-	{
-		id = available_table_ids.front();
-		available_table_ids.pop();
+	if (available_table_ids.empty()) {
+		id = max_table_id;
+		table_entries.resize(id + 1);
+		max_table_id++;
 	}
-	
+	else {
+		id = available_table_ids.back();
+		available_table_ids.pop_back();
+	}
+
 	table_entry table_entry = {
+		.hash_to_index = google::sparse_hash_map<uint64_t, uint32_t>(element_count),
 		.used_elems = 0,
-		.table_start = res.value().table_start,
-		.allocated_capacity = res.value().allocated_capacity
+		.block = res.value()
 	};
-	table_entries.insert({ id, table_entry });
+	
+	table_entries.set(id, table_entry);
+	
 	return id;
 }
 
 //elements are not initialized by default
 bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
-	auto it = table_entries.find(table_id);
-	assert(it != table_entries.end());
+	table_entry& entry = table_entries.mutating_get(table_id);
 
-	table_entry& entry = it->second;
-
-	if (element_count > entry.allocated_capacity) { //expand allocation
+	if (element_count > entry.block.allocated_capacity) { //expand allocation
 		std::optional<gc_block> alloc_res = allocate_block(element_count);
-		if (!alloc_res.has_value())
+		if (!alloc_res.has_value()) {
 			return false;
+		}
 
 		gc_block alloced_entry = alloc_res.value();
-		std::memmove(&table_elems[alloced_entry.table_start], &table_elems[entry.table_start], entry.used_elems * sizeof(value));
+		std::memmove(&table_elems[alloced_entry.table_start], &table_elems[entry.block.table_start], entry.used_elems * sizeof(value));
 
-		free_tables.insert({ entry.allocated_capacity, {
-			.table_start = entry.table_start,
-			.allocated_capacity = entry.allocated_capacity
-		} });
-
-		entry.table_start = alloced_entry.table_start;
-		entry.allocated_capacity = alloced_entry.allocated_capacity;
+		if (entry.block.allocated_capacity > 0) {
+			free_tables.insert({ entry.block.allocated_capacity, entry.block });
+		}
+		entry.block = alloced_entry;
+		entry.hash_to_index.resize(element_count);
 
 		return true;
 	}
-	else if(element_count < entry.allocated_capacity) {
-		uint32_t free_capacity = entry.allocated_capacity - element_count;
-		entry.allocated_capacity = element_count;
+	else if(element_count < entry.block.allocated_capacity) {
+		uint32_t free_capacity = entry.block.allocated_capacity - element_count;
+		entry.block.allocated_capacity = element_count;
+		entry.hash_to_index.resize(element_count);
 		free_tables.insert({ free_capacity, {
-			.table_start = entry.table_start + element_count,
+			.table_start = entry.block.table_start + element_count,
 			.allocated_capacity = free_capacity
 		} });
 		return true;
@@ -107,11 +110,8 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 }
 
 bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uint32_t min_elem_extend) {
-	auto it = table_entries.find(table_id);
-	assert(it != table_entries.end());
-
 	for (uint32_t size = max_elem_extend; size >= min_elem_extend; size--) {
-		if (reallocate_table(table_id, it->second.allocated_capacity + size))
+		if (reallocate_table(table_id, table_entries.unsafe_get(table_id).block.allocated_capacity + size))
 			return true;
 	}
 	return false;
@@ -124,11 +124,6 @@ void instance::garbage_collect(gc_collection_mode mode) {
 														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
 														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
 														functions_to_mark.push(closure_info.first); tables_to_mark.push(closure_info.second); break; } }
-
-
-	/*{ if(TO_TRACE.is_gc_type()) { tables_to_mark.push(TO_TRACE.table_id()); }\
-								else if(TO_TRACE.type() == vtype::STRING) { marked_strs.insert(TO_TRACE.str()); } \
-								if(TO_TRACE.type() == vtype::CLOSURE) { marked_functions.insert(TO_TRACE.closure().first); } }*/
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
@@ -169,7 +164,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		marked_tables.emplace(id);
 
 		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
-			value val = table_elems[i + entry.table_start];
+			value val = table_elems[i + entry.block.table_start];
 			switch (val.type())
 			{
 			case vtype::TABLE:
@@ -212,17 +207,18 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//sweep unreachable tables
-	for (auto table_it = table_entries.begin(); table_it != table_entries.end();) {
-		if (!marked_tables.contains(table_it->first)) {
-			available_table_ids.push(table_it->first);
-			table_it = table_entries.erase(table_it);
-		}
-		else {
-			table_it++;
+	available_table_ids.resize(available_table_ids.size() + (table_entries.size() - marked_tables.size()));
+	size_t k = available_table_ids.size() - 1;
+	for (size_t i = 0; i < max_table_id; i++) {
+		if (table_entries.test(i) && !marked_tables.contains(i)) {
+			available_table_ids.set(k, i);
+			k++;
+			table_entries.erase(i);
 		}
 	}
+
 	//free unreachable strings
-	for (auto it = active_strs.begin(); it != active_strs.end();)
+	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
 	{
 		if (!marked_strs.contains(*it)) {
 			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
@@ -233,10 +229,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			}
 
 			free(*it);
-			it = active_strs.erase(it);
-		}
-		else {
-			it++;
+			active_strs.erase(it); //it is still valid, weird google standard/convention not to invalidate it
 		}
 	}
 
@@ -245,20 +238,20 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	//sort table ids by table start address
 	std::vector<uint64_t> sorted_marked(marked_tables.begin(), marked_tables.end());
 	std::ranges::sort(sorted_marked, [this](uint64_t a, uint64_t b) -> bool {
-		return table_entries[a].table_start < table_entries[b].table_start;
+		return table_entries.unsafe_get(a).block.table_start < table_entries.unsafe_get(b).block.table_start;
 	});
 	size_t new_table_offset = 0;
 	for (uint64_t id : sorted_marked) {
-		instance::table_entry& entry = table_entries[id];
+		instance::table_entry& entry = table_entries.mutating_get(id);
 
-		if (entry.table_start == new_table_offset) {
+		if (entry.block.table_start == new_table_offset) {
 			new_table_offset += entry.used_elems;
 			continue;
 		}
 
-		std::memmove(&table_elems[new_table_offset], &table_elems[entry.table_start], entry.used_elems * sizeof(value));
+		std::memmove(&table_elems[new_table_offset], &table_elems[entry.block.table_start], entry.used_elems * sizeof(value));
 
-		entry.table_start = new_table_offset;
+		entry.block.table_start = new_table_offset;
 		new_table_offset += entry.used_elems;
 	}
 	table_offset = new_table_offset;
