@@ -6,6 +6,9 @@
 #include <variant>
 #include <vector>
 #include <set>
+#include <map>
+#include <unordered_set>
+#include <unordered_map>
 
 #include "tokenizer.h"
 #include "instance.h"
@@ -29,7 +32,7 @@ namespace HulaScript::Compilation {
 		struct function_declaration {
 			std::string name;
 			uint32_t max_locals;
-			std::set<std::string> captured_vars;
+			std::unordered_set<std::string> captured_vars;
 		};
 
 		struct lexical_scope {
@@ -52,8 +55,8 @@ namespace HulaScript::Compilation {
 		bool report_src_locs;
 		uint32_t max_globals;
 
-		std::map<std::string, class_declaration> class_decls;
-		std::map<std::string, variable_symbol> active_variables;
+		std::unordered_map<std::string, class_declaration> class_decls;
+		std::unordered_map<std::string, variable_symbol> active_variables;
 		std::vector<lexical_scope> scope_stack;
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
