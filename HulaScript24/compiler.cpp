@@ -575,7 +575,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		uint32_t capture_size = (uint32_t)func_decl_stack.back().captured_vars.size();
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = capture_size });
 
-		for (auto captured_var : func_decl_stack.back().captured_vars) {
+		for (auto& captured_var : func_decl_stack.back().captured_vars) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
 			
 			auto var_it = active_variables.find(captured_var);
@@ -734,12 +734,12 @@ void compiler::unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vect
 }
 
 void compiler::unwind_error() {
-	for (auto local : declared_toplevel_locals) {
+	for (auto& local : declared_toplevel_locals) {
 		active_variables.erase(local);
 	}
 	func_decl_stack.back().max_locals -= declared_toplevel_locals.size();
 	declared_toplevel_locals.clear();
-	for (auto global : declared_globals) {
+	for (auto& global : declared_globals) {
 		active_variables.erase(global);
 	}
 	max_globals -= declared_globals.size();

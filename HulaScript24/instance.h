@@ -13,6 +13,10 @@
 #include "value.h"
 #include "instructions.h"
 
+#include <sparsehash/sparse_hash_map>
+#include <sparsehash/sparse_hash_set>
+#include <sparsehash/sparsetable>
+
 namespace HulaScript::Compilation {
 	class compiler;
 }
@@ -34,23 +38,22 @@ namespace HulaScript::Runtime {
 			FINALIZE_COLLECT_RETURN = 2
 		};
 
-		struct table_entry {
-			std::map<uint64_t, uint32_t> hash_to_index;
-			uint32_t used_elems = 0;
-
-			size_t table_start = 0;
-			uint32_t allocated_capacity = 0;
-		};
-
 		struct gc_block {
 			size_t table_start;
 			uint32_t allocated_capacity;
 		};
 
+		struct table_entry {
+			google::sparse_hash_map<uint64_t, uint32_t> hash_to_index;
+			uint32_t used_elems = 0;
+			
+			gc_block block;
+		};
+
 		struct loaded_function_entry {
 			uint32_t start_address = 0;
-			std::set<uint32_t> referenced_func_ids;
-			std::set<char*> referenced_const_strs;
+			std::vector<uint32_t> referenced_func_ids;
+			std::vector<char*> referenced_const_strs;
 			uint32_t length = 0;
 
 			uint32_t parameter_count = 0;
@@ -79,11 +82,11 @@ namespace HulaScript::Runtime {
 		std::map<uint32_t, loaded_function_entry> function_entries;
 		std::map<uint32_t, source_loc> ip_src_locs;
 
-		std::map<uint64_t, table_entry> table_entries;
-		std::queue<uint64_t> available_table_ids;
+		google::sparsetable<table_entry> table_entries;
+		std::vector<uint64_t> available_table_ids;
 		uint64_t max_table_id;
 		std::map<uint32_t, gc_block> free_tables;
-		std::set<char*> active_strs;
+		google::sparse_hash_set<char*> active_strs;
 
 		static error type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip);
 
