@@ -6,7 +6,7 @@
 using namespace HulaScript::Runtime;
 
 std::variant<value, error> instance::execute() {
-	auto comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
+	auto table_hashid_comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
 
 	instruction* instructions = loaded_instructions.data();
 	uint_fast32_t ip = start_ip;
@@ -198,7 +198,7 @@ std::variant<value, error> instance::execute() {
 			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), comparator);
+			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), table_hashid_comparator);
 			if (it == table_entry.hash_to_index.end() || it->first != hash) {
 				evaluation_stack.push_back(value());
 			}
@@ -217,7 +217,7 @@ std::variant<value, error> instance::execute() {
 			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), comparator);
+			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), table_hashid_comparator);
 
 			bool insert = false;
 			if (it == table_entry.hash_to_index.end()) {
@@ -228,6 +228,7 @@ std::variant<value, error> instance::execute() {
 				table_elems[table_entry.block.table_start + it->second] = store_val;
 			}
 			else {
+				insert = true;
 				table_entry.hash_to_index.insert(it, std::make_pair(hash, table_entry.used_elems));
 			}
 			
