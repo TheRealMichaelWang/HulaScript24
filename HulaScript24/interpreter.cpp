@@ -6,6 +6,8 @@
 using namespace HulaScript::Runtime;
 
 std::variant<value, error> instance::execute() {
+	auto comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
+
 	instruction* instructions = loaded_instructions.data();
 	uint_fast32_t ip = start_ip;
 
@@ -193,11 +195,11 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			const table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
+			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = table_entry.hash_to_index.find(hash);
-			if (it == table_entry.hash_to_index.end()) {
+			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), comparator);
+			if (it == table_entry.hash_to_index.end() || it->first != hash) {
 				evaluation_stack.push_back(value());
 			}
 			else {
@@ -212,11 +214,24 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries.mutating_get(table_val.table_id());
+			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = table_entry.hash_to_index.find(hash);
-			if (it == table_entry.hash_to_index.end()) { //add new key to dictionary
+			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), comparator);
+
+			bool insert = false;
+			if (it == table_entry.hash_to_index.end()) {
+				insert = true;
+				table_entry.hash_to_index.push_back(std::make_pair(hash, table_entry.used_elems));
+			}
+			else if (it->first == hash) {
+				table_elems[table_entry.block.table_start + it->second] = store_val;
+			}
+			else {
+				table_entry.hash_to_index.insert(it, std::make_pair(hash, table_entry.used_elems));
+			}
+			
+			if (insert) {
 				if (table_entry.used_elems == table_entry.block.allocated_capacity) {
 					if (!reallocate_table(table_val.table_id(), 4, 1))
 					{
@@ -225,13 +240,8 @@ std::variant<value, error> instance::execute() {
 						goto stop_exec;
 					}
 				}
-
-				table_entry.hash_to_index.insert({ hash, table_entry.used_elems });
 				table_elems[table_entry.block.table_start + table_entry.used_elems] = store_val;
 				table_entry.used_elems++;
-			}
-			else { //write to existing value
-				table_elems[table_entry.block.table_start + it->second] = store_val;
 			}
 
 			evaluation_stack.push_back(store_val);
@@ -434,8 +444,8 @@ uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 	if (available_function_ids.empty())
 		id = max_function_id++;
 	else {
-		id = available_function_ids.front();
-		available_function_ids.pop();
+		id = available_function_ids.back();
+		available_function_ids.pop_back();
 	}
 	instructions.push_back({ .op = opcode::FUNCTION, .operand = id });
 	return id;

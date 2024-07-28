@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <vector>
 #include <map>
-#include <queue>
+#include <unordered_map>
 #include <set>
+#include <unordered_set>
 #include <string>
 #include <optional>
 #include <variant>
@@ -12,10 +13,6 @@
 #include "error.h"
 #include "value.h"
 #include "instructions.h"
-
-#include <sparsehash/sparse_hash_map>
-#include <sparsehash/sparse_hash_set>
-#include <sparsehash/sparsetable>
 
 namespace HulaScript::Compilation {
 	class compiler;
@@ -44,7 +41,7 @@ namespace HulaScript::Runtime {
 		};
 
 		struct table_entry {
-			google::sparse_hash_map<uint64_t, uint32_t> hash_to_index;
+			std::vector<std::pair<uint64_t, uint32_t>> hash_to_index;
 			uint32_t used_elems = 0;
 			
 			gc_block block;
@@ -69,24 +66,24 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> extended_offsets;
 
 		std::vector<value> constants;
-		std::map<uint64_t, uint32_t> added_constant_hashes;
-		std::queue<uint32_t> available_constant_ids;
+		std::unordered_map<uint64_t, uint32_t> added_constant_hashes;
+		std::vector<uint32_t> available_constant_ids;
 
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, start_ip;
 		size_t table_offset, max_table;
 
 		std::vector<instruction> loaded_instructions;
-		std::queue<uint32_t> available_function_ids;
+		std::vector<uint32_t> available_function_ids;
 		uint32_t max_function_id;
 		
-		std::map<uint32_t, loaded_function_entry> function_entries;
+		std::unordered_map<uint32_t, loaded_function_entry> function_entries;
 		std::map<uint32_t, source_loc> ip_src_locs;
 
-		google::sparsetable<table_entry> table_entries;
+		std::unordered_map<uint64_t, table_entry> table_entries;
 		std::vector<uint64_t> available_table_ids;
 		uint64_t max_table_id;
 		std::map<uint32_t, gc_block> free_tables;
-		google::sparse_hash_set<char*> active_strs;
+		std::unordered_set<char*> active_strs;
 
 		static error type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip);
 

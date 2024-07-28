@@ -55,7 +55,6 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	uint64_t id;
 	if (available_table_ids.empty()) {
 		id = max_table_id;
-		table_entries.resize(id + 1);
 		max_table_id++;
 	}
 	else {
@@ -64,19 +63,19 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	}
 
 	table_entry table_entry = {
-		.hash_to_index = google::sparse_hash_map<uint64_t, uint32_t>(element_count),
+		.hash_to_index = std::vector<std::pair<uint64_t, uint32_t>>(element_count),
 		.used_elems = 0,
 		.block = res.value()
 	};
 	
-	table_entries.set(id, table_entry);
+	table_entries.insert({ id, table_entry });
 	
 	return id;
 }
 
 //elements are not initialized by default
 bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
-	table_entry& entry = table_entries.mutating_get(table_id);
+	table_entry& entry = table_entries[table_id];
 
 	if (element_count > entry.block.allocated_capacity) { //expand allocation
 		std::optional<gc_block> alloc_res = allocate_block(element_count);
@@ -111,7 +110,7 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 
 bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uint32_t min_elem_extend) {
 	for (uint32_t size = max_elem_extend; size >= min_elem_extend; size--) {
-		if (reallocate_table(table_id, table_entries.unsafe_get(table_id).block.allocated_capacity + size))
+		if (reallocate_table(table_id, table_entries[table_id].block.allocated_capacity + size))
 			return true;
 	}
 	return false;
@@ -207,13 +206,13 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//sweep unreachable tables
-	available_table_ids.resize(available_table_ids.size() + (table_entries.size() - marked_tables.size()));
-	size_t k = available_table_ids.size() - 1;
-	for (size_t i = 0; i < max_table_id; i++) {
-		if (table_entries.test(i) && !marked_tables.contains(i)) {
-			available_table_ids.set(k, i);
-			k++;
-			table_entries.erase(i);
+	for (auto it = table_entries.begin(); it != table_entries.end();) {
+		if (!marked_tables.contains(it->first)) {
+			available_table_ids.push_back(it->first);
+			it = table_entries.erase(it);
+		}
+		else {
+			it++;
 		}
 	}
 
@@ -224,7 +223,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
-				available_constant_ids.push(it2->second);
+				available_constant_ids.push_back(it2->second);
 				added_constant_hashes.erase(hash);
 			}
 
@@ -238,11 +237,11 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	//sort table ids by table start address
 	std::vector<uint64_t> sorted_marked(marked_tables.begin(), marked_tables.end());
 	std::ranges::sort(sorted_marked, [this](uint64_t a, uint64_t b) -> bool {
-		return table_entries.unsafe_get(a).block.table_start < table_entries.unsafe_get(b).block.table_start;
+		return table_entries[a].block.table_start < table_entries[b].block.table_start;
 	});
 	size_t new_table_offset = 0;
 	for (uint64_t id : sorted_marked) {
-		instance::table_entry& entry = table_entries.mutating_get(id);
+		instance::table_entry& entry = table_entries[id];
 
 		if (entry.block.table_start == new_table_offset) {
 			new_table_offset += entry.used_elems;
@@ -261,7 +260,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		//remove unreachable functions
 		for (auto it = function_entries.begin(); it != function_entries.end();) {
 			if (!marked_functions.contains(it->first)) {
-				available_function_ids.push(it->first);
+				available_function_ids.push_back(it->first);
 				it = function_entries.erase(it);
 			}
 			else

@@ -550,7 +550,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		UNWRAP_AND_HANDLE(compile_statement(tokenizer, func_instructions, function_src_locs, false), {
 			unwind_locals(func_instructions, false);
 			func_decl_stack.pop_back();
-			target_instance.available_function_ids.push(func_id);
+			target_instance.available_function_ids.push_back(func_id);
 			tokenizer.current_function_name = std::nullopt;
 		});
 	}
@@ -558,7 +558,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	MATCH_AND_SCAN_AND_HANDLE(token_type::END_BLOCK, {
 		unwind_locals(func_instructions, false);
 		func_decl_stack.pop_back();
-		target_instance.available_function_ids.push(func_id);
+		target_instance.available_function_ids.push_back(func_id);
 	});
 	unwind_locals(func_instructions, false);
 	{
