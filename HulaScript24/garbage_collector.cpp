@@ -48,7 +48,9 @@ std::optional<instance::gc_block> instance::allocate_block(uint32_t element_coun
 //elements are initialized by default to nil
 std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	std::optional<gc_block> res = allocate_block(element_count);
-	if (!res.has_value()) {
+	auto ptr = (std::pair<uint64_t, uint32_t>*)(element_count > 0 ? malloc(element_count * sizeof(std::pair<uint64_t, uint32_t>)) : NULL);
+
+	if (!res.has_value() || (element_count > 0 && ptr == NULL)) {
 		return std::nullopt;
 	}
 
@@ -63,12 +65,11 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	}
 
 	table_entry table_entry = {
-		.hash_to_index = std::vector<std::pair<uint64_t, uint32_t>>(element_count),
+		.key_hashes = ptr,
+		.key_hash_capacity = element_count,
 		.used_elems = 0,
 		.block = res.value()
 	};
-	
-	table_entries.insert({ id, table_entry });
 	
 	return id;
 }

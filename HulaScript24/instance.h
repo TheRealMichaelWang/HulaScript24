@@ -9,6 +9,7 @@
 #include <string>
 #include <optional>
 #include <variant>
+#include "sparsepp/spp.h"
 
 #include "error.h"
 #include "value.h"
@@ -41,7 +42,8 @@ namespace HulaScript::Runtime {
 		};
 
 		struct table_entry {
-			std::vector<std::pair<uint64_t, uint32_t>> hash_to_index;
+			std::pair<uint64_t, uint32_t>* key_hashes;
+			uint32_t key_hash_capacity;
 			uint32_t used_elems = 0;
 			
 			gc_block block;
@@ -79,10 +81,10 @@ namespace HulaScript::Runtime {
 		std::unordered_map<uint32_t, loaded_function_entry> function_entries;
 		std::map<uint32_t, source_loc> ip_src_locs;
 
-		std::unordered_map<uint64_t, table_entry> table_entries;
+		table_entry* table_entries;
 		std::vector<uint64_t> available_table_ids;
 		uint64_t max_table_id;
-		std::map<uint32_t, gc_block> free_tables;
+		std::multimap<uint32_t, gc_block> free_tables;
 		std::unordered_set<char*> active_strs;
 
 		static error type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip);
