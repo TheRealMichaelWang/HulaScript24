@@ -58,13 +58,20 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 	if (available_table_ids.empty()) {
 		id = max_table_id;
 		max_table_id++;
+
+		auto new_table_entries = (table_entry*)realloc(table_entries, max_table_id * sizeof(table_entry));
+		if (new_table_entries == NULL) {
+			free(ptr);
+			return std::nullopt;
+		}
+		table_entries = new_table_entries;
 	}
 	else {
 		id = available_table_ids.back();
 		available_table_ids.pop_back();
 	}
 
-	table_entry table_entry = {
+	table_entries[id] = {
 		.key_hashes = ptr,
 		.key_hash_capacity = element_count,
 		.used_elems = 0,
@@ -83,6 +90,11 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 		if (!alloc_res.has_value()) {
 			return false;
 		}
+		auto new_key_hashes = (std::pair<uint64_t, uint32_t>*)realloc(entry.key_hashes, element_count * sizeof(std::pair<uint64_t, uint32_t>));
+		if (new_key_hashes == NULL) {
+			return false;
+		}
+		entry.key_hashes = new_key_hashes;
 
 		gc_block alloced_entry = alloc_res.value();
 		std::memmove(&table_elems[alloced_entry.table_start], &table_elems[entry.block.table_start], entry.used_elems * sizeof(value));
@@ -91,22 +103,10 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 			free_tables.insert({ entry.block.allocated_capacity, entry.block });
 		}
 		entry.block = alloced_entry;
-		entry.hash_to_index.resize(element_count);
-
-		return true;
-	}
-	else if(element_count < entry.block.allocated_capacity) {
-		uint32_t free_capacity = entry.block.allocated_capacity - element_count;
-		entry.block.allocated_capacity = element_count;
-		entry.hash_to_index.resize(element_count);
-		free_tables.insert({ free_capacity, {
-			.table_start = entry.block.table_start + element_count,
-			.allocated_capacity = free_capacity
-		} });
 		return true;
 	}
 	else
-		return true;
+		return false;
 }
 
 bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uint32_t min_elem_extend) {
@@ -207,13 +207,13 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//sweep unreachable tables
-	for (auto it = table_entries.begin(); it != table_entries.end();) {
-		if (!marked_tables.contains(it->first)) {
-			available_table_ids.push_back(it->first);
-			it = table_entries.erase(it);
-		}
-		else {
-			it++;
+	for (uint_fast64_t i = 0; i < max_table_id; i++) {
+		table_entry* current = &table_entries[i];
+		if (current->used_elems <= current->key_hash_capacity && !marked_tables.contains(i)) {
+			available_table_ids.push_back(i);
+			free(current->key_hashes);
+			current->used_elems = UINT32_MAX;
+			current->key_hash_capacity = 0;
 		}
 	}
 

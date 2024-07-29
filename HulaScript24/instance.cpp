@@ -25,6 +25,17 @@ instance::~instance() {
 	free(local_elems);
 	free(global_elems);
 	free(table_elems);
+
+	for (uint_fast64_t i = 0; i < max_table_id; i++) {
+		table_entry* current = &table_entries[i];
+		if (current->used_elems <= current->key_hash_capacity) {
+			available_table_ids.push_back(i);
+			free(current->key_hashes);
+			current->used_elems = UINT32_MAX;
+			current->key_hash_capacity = 0;
+		}
+	}
+	free(table_entries);
 }
 
 uint32_t instance::make_string(const char* string) {

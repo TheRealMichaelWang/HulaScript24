@@ -197,10 +197,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
 		for (uint_fast32_t i = length; i >= 1; i--) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
-			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 
 			HulaScript::Runtime::value val((double)i);
 			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(val) });
+			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 			current_section.push_back({ .op = opcode::DISCARD_TOP });
 		}
