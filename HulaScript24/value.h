@@ -11,7 +11,9 @@ namespace HulaScript::Runtime {
 		TABLE = 3,
 		STRING = 2,
 		NUMBER = 1,
-		NIL = 0
+		NIL = 0,
+
+		INTERNAL_CONSTHASH = 5
 	};
 
 	struct value {
@@ -21,8 +23,11 @@ namespace HulaScript::Runtime {
 		value(bool b) : _type(vtype::NUMBER), func_id(0), data({.number = b ? 1.0 : 0.0}) { }
 
 		value(char* raw_cstr) : _type(vtype::STRING), func_id(0), data({.str = raw_cstr}) { }
+		value(std::string str) : value((char*)str.c_str()) { }
 		value(uint64_t raw_table_id) : _type(vtype::TABLE), func_id(0), data({.table_id = raw_table_id}) { }
 		value(uint32_t raw_func_id, uint64_t raw_table_id) : _type(vtype::CLOSURE), func_id(raw_func_id), data({.table_id = raw_table_id}) { }
+
+		value(vtype type, uint64_t raw_data) : _type(type), func_id(0), data({.table_id = raw_data}){ }
 
 		const vtype type() const {
 			return _type;
@@ -44,7 +49,11 @@ namespace HulaScript::Runtime {
 			return std::make_pair(func_id, data.table_id);
 		}
 
+		//computes a unique value hash
 		const uint64_t compute_hash();
+
+		//computes a hash specifically to represent value keys
+		const uint64_t compute_key_hash();
 
 		std::string to_print_string();
 	private:

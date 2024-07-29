@@ -51,9 +51,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 	{
 	case token_type::IDENTIFIER: {
 		std::string id = tokenizer.last_token().str();
+		uint64_t id_hash = str_hash(id.c_str());
 		SCAN;
 
-		auto local_it = active_variables.find(id);
+		auto local_it = active_variables.find(id_hash);
 		if (local_it != active_variables.end()) {
 			if (tokenizer.match_last(token_type::SET)) {
 				SCAN;
@@ -76,14 +77,14 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 					function_declaration& current_func = func_decl_stack.back();
 
 					for (uint32_t i = (uint32_t)(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {
-						auto capture_it = func_decl_stack[i].captured_vars.find(id);
+						auto capture_it = func_decl_stack[i].captured_vars.find(id_hash);
 						if (capture_it == func_decl_stack[i].captured_vars.end()) {
-							func_decl_stack[i].captured_vars.insert(id);
+							func_decl_stack[i].captured_vars.insert(id_hash);
 						}
 					}
 
 					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table, which is always local variable 0 in functions
-					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(id) });
+					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id_hash)});
 					current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				}
 				else {
@@ -93,7 +94,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			}
 		}
 		else {
-			auto class_it = class_decls.find(id);
+			auto class_it = class_decls.find(id_hash);
 			if (class_it != class_decls.end()) {
 				return std::nullopt;
 			}
@@ -101,18 +102,18 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 
-				scope_stack.back().symbol_names.push_back(id);
+				scope_stack.back().symbol_names.push_back(id_hash);
 				variable_symbol sym = {
 					.name = id,
 					.is_global = false,
 					.local_id = func_decl_stack.back().max_locals,
 					.func_id = (uint32_t)(func_decl_stack.size() - 1)
 				};
-				active_variables.insert({ id, sym });
+				active_variables.insert({ id_hash, sym });
 				func_decl_stack.back().max_locals++;
 
 				if (func_decl_stack.size() == 1) {
-					declared_toplevel_locals.push_back(id);
+					declared_toplevel_locals.push_back(id_hash);
 				}
 					
 				current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
@@ -148,7 +149,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		SCAN;
 		break;
 	case token_type::STRING_LITERAL:
-		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(token.str()) });
+		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(Runtime::value(token.str())) });
 		SCAN;
 		break;
 	case token_type::NIL:
@@ -199,7 +200,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			current_section.push_back({ .op = opcode::DUPLICATE });
 
 			HulaScript::Runtime::value val((double)i);
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(val) });
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_key(val) });
 			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 			current_section.push_back({ .op = opcode::DISCARD_TOP });
@@ -265,7 +266,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		{
 			SCAN;
 			MATCH(token_type::IDENTIFIER);
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.make_string(tokenizer.last_token().str()) });
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_key(Runtime::value(tokenizer.last_token().str())) });
 			SCAN;
 
 			if (tokenizer.match_last(token_type::SET)) {
@@ -505,6 +506,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 
 std::optional<error> compiler::compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section) {
 	std::vector<std::string> param_ids;
+	std::vector<uint64_t> param_hashes;
 	MATCH_AND_SCAN(token_type::OPEN_PAREN); 
 	while (!tokenizer.match_last(token_type::CLOSE_PAREN) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
@@ -514,6 +516,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		MATCH(token_type::IDENTIFIER);
 		std::string id = tokenizer.last_token().str();
 		param_ids.push_back(id);
+		param_hashes.push_back(str_hash(id.c_str()));
 		UNWRAP(validate_symbol_availability(id, "function parameter", tokenizer.last_token_loc()));
 		SCAN;
 	}
@@ -524,7 +527,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		.name = name,
 		.max_locals = (uint32_t)(1 + param_ids.size()),
 	});
-	scope_stack.push_back({ .symbol_names = param_ids });
+	scope_stack.push_back({ .symbol_names = param_hashes });
 
 	std::vector<instruction> func_instructions;
 	std::map<uint32_t, source_loc> function_src_locs;
@@ -541,7 +544,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			.local_id = param_id,
 			.func_id = (uint32_t)(func_decl_stack.size() - 1)
 		};
-		active_variables.insert({ param_ids[i], sym });
+		active_variables.insert({ str_hash(param_ids[i].c_str()), sym });
 		func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
 	}
 
@@ -577,9 +580,9 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 
 		for (auto& captured_var : func_decl_stack.back().captured_vars) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
-			
+
 			auto var_it = active_variables.find(captured_var);
-			uint32_t prop_str_id = target_instance.make_string(captured_var);
+			uint32_t prop_str_id = target_instance.add_constant_strhash(captured_var);
 			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
 
 			if (var_it->second.func_id < func_decl_stack.size() - 2) { //this is a captured 
@@ -629,7 +632,7 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 				.is_global = true,
 				.local_id = max_globals
 			};
-			active_variables.insert({ id, sym });
+			active_variables.insert({ str_hash(id.c_str()), sym});
 			max_globals++;
 
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
@@ -652,9 +655,10 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 				.is_global = true,
 				.local_id = max_globals
 			};
-			active_variables.insert({ id, sym });
+			uint64_t hash = str_hash(id.c_str());
+			active_variables.insert({ hash, sym });
 			max_globals++;
-			declared_globals.push_back(id);
+			declared_globals.push_back(hash);
 
 			UNWRAP_AND_HANDLE(compile_function(id, tokenizer, repl_section), unwind_error());
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
@@ -701,7 +705,7 @@ void compiler::unwind_locals(std::vector<instruction>& instructions, bool use_un
 	if (use_unwind_ins && scope_stack.back().symbol_names.size() > 0) {
 		instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
 	}
-	for (std::string symbol : scope_stack.back().symbol_names) {
+	for (uint64_t symbol : scope_stack.back().symbol_names) {
 		active_variables.erase(symbol);
 	}
 	scope_stack.pop_back();
@@ -753,12 +757,13 @@ void compiler::unwind_error() {
 }
 
 std::optional<error> compiler::validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc) {
-	if (class_decls.contains(id)) {
+	uint64_t hash = str_hash(id.c_str());
+	if (class_decls.contains(hash)) {
 		std::stringstream ss;
 		ss << "Cannot declare " << symbol_type << ": a class named " << id << " already exists.";
 		return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), loc);
 	}
-	else if (active_variables.contains(id)) {
+	else if (active_variables.contains(hash)) {
 		std::stringstream ss;
 		ss << "Cannot declare " << symbol_type << ": a variable named " << id << " already exists.";
 		return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), loc);

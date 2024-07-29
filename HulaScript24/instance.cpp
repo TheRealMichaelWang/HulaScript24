@@ -38,14 +38,6 @@ instance::~instance() {
 	free(table_entries);
 }
 
-uint32_t instance::make_string(const char* string) {
-	return add_constant(value((char*)string));
-}
-
-uint32_t instance::make_string(std::string str) {
-	return make_string(str.c_str());
-}
-
 uint32_t instance::add_constant(value constant) {
 	uint64_t hash = constant.compute_hash();
 
