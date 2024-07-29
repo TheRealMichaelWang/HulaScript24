@@ -198,13 +198,25 @@ std::variant<value, error> instance::execute() {
 			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), table_hashid_comparator);
-			if (it == table_entry.hash_to_index.end() || it->first != hash) {
-				evaluation_stack.push_back(value());
+			uint32_t low = 0;
+			uint32_t high = table_entry.key_hash_capacity;
+			while (high > low)
+			{
+				uint32_t mid = (high & low) + ((high ^ low) >> 1);
+				std::pair<uint64_t, uint32_t>& current = table_entry.key_hashes[mid];
+
+				if (current.first == hash) {
+					evaluation_stack.push_back(table_elems[table_entry.block.table_start + current.second]);
+					goto next_ins;
+				}
+				else if(current.first < hash) {
+					high = mid;
+				}
+				else {
+					low = mid;
+				}
 			}
-			else {
-				evaluation_stack.push_back(table_elems[table_entry.block.table_start + it->second]);
-			}
+			evaluation_stack.push_back(value());
 			goto next_ins;
 		}
 		case opcode::STORE_TABLE_ELEM: {
@@ -212,40 +224,62 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
+
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
 			table_entry& table_entry = table_entries[table_val.table_id()];
 			uint64_t hash = key_val.compute_hash();
 
-			auto it = std::lower_bound(table_entry.hash_to_index.begin(), table_entry.hash_to_index.end(), std::make_pair(hash, 0), table_hashid_comparator);
+			evaluation_stack.push_back(store_val);
 
-			bool insert = false;
-			if (it == table_entry.hash_to_index.end()) {
-				insert = true;
-				table_entry.hash_to_index.push_back(std::make_pair(hash, table_entry.used_elems));
+			uint32_t low = 0;
+			uint32_t high = table_entry.key_hash_capacity;
+			uint32_t mid = 0;
+			while (high > low)
+			{
+				mid = (high & low) + ((high ^ low) >> 1);
+				std::pair<uint64_t, uint32_t>& current = table_entry.key_hashes[mid];
+
+				if (current.first == hash) {
+					table_elems[table_entry.block.table_start + current.second] = store_val;
+					goto next_ins;
+				}
+				else if (current.first < hash) {
+					high = mid;
+				}
+				else {
+					low = mid;
+				}
 			}
-			else if (it->first == hash) {
-				table_elems[table_entry.block.table_start + it->second] = store_val;
-			}
-			else {
-				insert = true;
-				table_entry.hash_to_index.insert(it, std::make_pair(hash, table_entry.used_elems));
+
+			//protect operands from potential garbage collect during allocate
+			if (table_entry.used_elems == table_entry.key_hash_capacity) {
+				table_entry.key_hash_capacity += 1;
+				auto new_buffer = (std::pair<uint64_t, uint32_t>*)realloc(table_entry.key_hashes, table_entry.key_hash_capacity * sizeof(std::pair<uint64_t, uint32_t>));
+				if (new_buffer == NULL) {
+					LOAD_SRC_LOC(src_loc, ip);
+					current_error = error(etype::MEMORY, "Cannot add new element to table.", src_loc, ip);
+					goto stop_exec;
+				}
+				table_entry.key_hashes = new_buffer;
 			}
 			
-			if (insert) {
-				if (table_entry.used_elems == table_entry.block.allocated_capacity) {
-					if (!reallocate_table(table_val.table_id(), 4, 1))
-					{
-						LOAD_SRC_LOC(src_loc, ip);
-						current_error = error(etype::MEMORY, "Failed to add to table.", src_loc, ip);
-						goto stop_exec;
-					}
+			std::memmove(&table_entry.key_hashes[mid + 1], &table_entry.key_hashes[mid], (table_entry.used_elems - mid) * sizeof(std::pair<uint64_t, uint32_t>));
+			table_entry.key_hashes[mid] = std::make_pair(hash, table_entry.used_elems);
+			
+			if (table_entry.used_elems == table_entry.block.allocated_capacity) {
+				scratchpad_stack.push_back(table_val);
+				if (!reallocate_table(table_val.table_id(), 4, 1))
+				{
+					LOAD_SRC_LOC(src_loc, ip);
+					current_error = error(etype::MEMORY, "Failed to add to table.", src_loc, ip);
+					goto stop_exec;
 				}
-				table_elems[table_entry.block.table_start + table_entry.used_elems] = store_val;
-				table_entry.used_elems++;
+				scratchpad_stack.pop_back();
 			}
-
-			evaluation_stack.push_back(store_val);
+			table_elems[table_entry.block.table_start + table_entry.used_elems] = store_val;
+			table_entry.used_elems++;
+			
 			goto next_ins;
 		}
 		case opcode::ALLOCATE_DYN:
