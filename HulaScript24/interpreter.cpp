@@ -199,8 +199,8 @@ std::variant<value, error> instance::execute() {
 			uint64_t hash = key_val.compute_hash();
 
 			uint32_t low = 0;
-			uint32_t high = table_entry.key_hash_capacity;
-			while (high > low)
+			uint32_t high = table_entry.used_elems;
+			while (low < high)
 			{
 				uint32_t mid = (high & low) + ((high ^ low) >> 1);
 				std::pair<uint64_t, uint32_t>& current = table_entry.key_hashes[mid];
@@ -209,11 +209,11 @@ std::variant<value, error> instance::execute() {
 					evaluation_stack.push_back(table_elems[table_entry.block.table_start + current.second]);
 					goto next_ins;
 				}
-				else if(current.first < hash) {
+				else if(hash < current.first) {
 					high = mid;
 				}
 				else {
-					low = mid;
+					low = mid + 1;
 				}
 			}
 			evaluation_stack.push_back(value());
@@ -233,22 +233,22 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.push_back(store_val);
 
 			uint32_t low = 0;
-			uint32_t high = table_entry.key_hash_capacity;
-			uint32_t mid = 0;
-			while (high > low)
+			uint32_t high = table_entry.used_elems;
+			while (low < high)
 			{
-				mid = (high & low) + ((high ^ low) >> 1);
+				//mid = (high + low) / 2;
+				uint32_t mid = (high & low) + ((high ^ low) >> 1);
 				std::pair<uint64_t, uint32_t>& current = table_entry.key_hashes[mid];
 
 				if (current.first == hash) {
 					table_elems[table_entry.block.table_start + current.second] = store_val;
 					goto next_ins;
 				}
-				else if (current.first < hash) {
+				else if (hash < current.first) {
 					high = mid;
 				}
 				else {
-					low = mid;
+					low = mid + 1;
 				}
 			}
 
@@ -264,8 +264,10 @@ std::variant<value, error> instance::execute() {
 				table_entry.key_hashes = new_buffer;
 			}
 			
-			std::memmove(&table_entry.key_hashes[mid + 1], &table_entry.key_hashes[mid], (table_entry.used_elems - mid) * sizeof(std::pair<uint64_t, uint32_t>));
-			table_entry.key_hashes[mid] = std::make_pair(hash, table_entry.used_elems);
+			if (low < table_entries->used_elems) {
+				std::memmove(&table_entry.key_hashes[low + 1], &table_entry.key_hashes[low], (table_entry.used_elems - low) * sizeof(std::pair<uint64_t, uint32_t>));
+			}
+			table_entry.key_hashes[low] = std::make_pair(hash, table_entry.used_elems);
 			
 			if (table_entry.used_elems == table_entry.block.allocated_capacity) {
 				scratchpad_stack.push_back(table_val);

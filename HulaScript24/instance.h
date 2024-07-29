@@ -9,7 +9,6 @@
 #include <string>
 #include <optional>
 #include <variant>
-#include "sparsepp/spp.h"
 
 #include "error.h"
 #include "value.h"
