@@ -196,7 +196,7 @@ std::variant<value, error> instance::execute() {
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
 			table_entry& table_entry = table_entries[table_val.table_id()];
-			uint64_t hash = key_val.compute_hash();
+			uint64_t hash = key_val.compute_key_hash();
 
 			uint32_t low = 0;
 			uint32_t high = table_entry.used_elems;
@@ -228,7 +228,7 @@ std::variant<value, error> instance::execute() {
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
 			table_entry& table_entry = table_entries[table_val.table_id()];
-			uint64_t hash = key_val.compute_hash();
+			uint64_t hash = key_val.compute_key_hash();
 
 			evaluation_stack.push_back(store_val);
 

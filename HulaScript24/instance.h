@@ -13,6 +13,7 @@
 #include "error.h"
 #include "value.h"
 #include "instructions.h"
+#include "hash.h"
 
 namespace HulaScript::Compilation {
 	class compiler;
@@ -23,9 +24,6 @@ namespace HulaScript::Runtime {
 	public:
 		instance(uint32_t max_locals, uint32_t max_globals, size_t max_table);
 		~instance();
-
-		uint32_t make_string(const char* str);
-		uint32_t make_string(std::string str);
 
 		std::variant<value, error> execute();
 	private:
@@ -97,6 +95,14 @@ namespace HulaScript::Runtime {
 
 		uint32_t emit_function_start(std::vector<instruction>& instructions);
 		uint32_t add_constant(value constant);
+
+		uint32_t add_constant_strhash(uint64_t str_hash) {
+			return add_constant(value(vtype::INTERNAL_CONSTHASH, hash_combine(str_hash, (uint64_t)vtype::STRING)));
+		}
+		
+		uint32_t add_constant_key(value key) {
+			return add_constant(value(vtype::INTERNAL_CONSTHASH, key.compute_hash()));
+		}
 
 		friend class HulaScript::Compilation::compiler;
 	};

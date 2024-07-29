@@ -12,20 +12,31 @@ const uint64_t value::compute_hash() {
 	case vtype::CLOSURE:
 		init_hash = hash_combine(func_id, data.table_id);
 		break;
+	case vtype::INTERNAL_CONSTHASH:
+		[[fallthrough]];
+	case vtype::NUMBER:
+		[[fallthrough]];
 	case vtype::TABLE:
 		init_hash = data.table_id;
 		break;
 	case vtype::STRING:
 		init_hash = str_hash(data.str);
 		break;
-	case vtype::NUMBER:
-		init_hash = data.table_id;
-		break;
 	case vtype::NIL:
 		return 0;
 	}
 
 	return hash_combine(init_hash, (uint64_t)_type);
+}
+
+const uint64_t value::compute_key_hash() {
+	switch (_type)
+	{
+	case vtype::INTERNAL_CONSTHASH:
+		return data.table_id;
+	default:
+		return compute_hash();
+	}
 }
 
 std::string value::to_print_string() {

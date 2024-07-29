@@ -32,11 +32,11 @@ namespace HulaScript::Compilation {
 		struct function_declaration {
 			std::string name;
 			uint32_t max_locals;
-			std::unordered_set<std::string> captured_vars;
+			std::unordered_set<uint64_t> captured_vars;
 		};
 
 		struct lexical_scope {
-			std::vector<std::string> symbol_names;
+			std::vector<uint64_t> symbol_names;
 		};
 
 		struct loop_scope {
@@ -55,14 +55,14 @@ namespace HulaScript::Compilation {
 		bool report_src_locs;
 		uint32_t max_globals;
 
-		std::unordered_map<std::string, class_declaration> class_decls;
-		std::unordered_map<std::string, variable_symbol> active_variables;
+		std::unordered_map<uint64_t, class_declaration> class_decls;
+		std::unordered_map<uint64_t, variable_symbol> active_variables;
 		std::vector<lexical_scope> scope_stack;
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;
 
-		std::vector<std::string> declared_toplevel_locals; //locals declared DURING the compilation session; cleared afterwards
-		std::vector<std::string> declared_globals; //globals declared DURING the compilation session; cleared afterwards
+		std::vector<uint64_t> declared_toplevel_locals; //locals declared DURING the compilation session; cleared afterwards
+		std::vector<uint64_t> declared_globals; //globals declared DURING the compilation session; cleared afterwards
 		uint32_t max_instruction;
 
 		instance& target_instance;
