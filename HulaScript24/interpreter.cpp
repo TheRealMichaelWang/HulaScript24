@@ -264,7 +264,7 @@ std::variant<value, error> instance::execute() {
 				table_entry.key_hashes = new_buffer;
 			}
 			
-			if (low < table_entries->used_elems) {
+			if (low < table_entry.used_elems) {
 				std::memmove(&table_entry.key_hashes[low + 1], &table_entry.key_hashes[low], (table_entry.used_elems - low) * sizeof(std::pair<uint64_t, uint32_t>));
 			}
 			table_entry.key_hashes[low] = std::make_pair(hash, table_entry.used_elems);
