@@ -31,6 +31,7 @@ namespace HulaScript::Compilation {
 			std::string name;
 			uint32_t max_locals;
 			spp::sparse_hash_set<uint64_t> captured_vars;
+			std::optional<class_declaration> class_decl = std::nullopt;
 		};
 
 		struct lexical_scope {

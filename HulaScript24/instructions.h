@@ -62,7 +62,6 @@ namespace HulaScript::Runtime {
 		FUNCTION,
 		FUNCTION_END,
 		MAKE_CLOSURE,
-		CHECK_ARGS,
 		CALL,
 		RETURN,
 
