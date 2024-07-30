@@ -218,7 +218,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//free unreachable strings
-	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
+	for (auto it = active_strs.begin(); it != active_strs.end();)
 	{
 		if (!marked_strs.contains(*it)) {
 			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
@@ -229,7 +229,10 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			}
 
 			free(*it);
-			active_strs.erase(it); //it is still valid, weird google standard/convention not to invalidate it
+			it = active_strs.erase(it);
+		}
+		else {
+			it++;
 		}
 	}
 

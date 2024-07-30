@@ -71,7 +71,7 @@ std::variant<char, error> tokenizer::scan_control() {
 			scan_char();
 			NEXT_HEX(hex_a);
 			NEXT_HEX(hex_b);
-			uint16_t total = hex_a << 4 + hex_b;
+			uint16_t total = (hex_a << 4) + hex_b;
 			return (char)total;
 		}
 		default: {
