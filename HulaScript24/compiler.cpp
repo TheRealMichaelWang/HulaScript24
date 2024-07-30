@@ -148,10 +148,11 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(Runtime::value(token.number())) });
 		SCAN;
 		break;
-	case token_type::STRING_LITERAL:
-		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(Runtime::value(token.str())) });
+	case token_type::STRING_LITERAL: {
+		current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant(Runtime::value((char*)token.str().c_str())) });
 		SCAN;
 		break;
+	}
 	case token_type::NIL:
 		SCAN;
 		current_section.push_back({ .op = opcode::PUSH_NIL });
@@ -266,7 +267,8 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		{
 			SCAN;
 			MATCH(token_type::IDENTIFIER);
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_key(Runtime::value(tokenizer.last_token().str())) });
+			uint64_t prop_hash = str_hash(tokenizer.last_token().str().c_str());
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(prop_hash) });
 			SCAN;
 
 			if (tokenizer.match_last(token_type::SET)) {

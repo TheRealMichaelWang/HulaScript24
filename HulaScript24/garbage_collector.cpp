@@ -218,19 +218,22 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//free unreachable strings
-	for (auto it = active_strs.begin(); it != active_strs.end(); it++)
+	for (auto it = active_strs.begin(); it != active_strs.end();)
 	{
 		if (!marked_strs.contains(*it)) {
-			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
+			char* str = *it;
+			uint64_t hash = hash_combine(str_hash(str), vtype::STRING);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
 				available_constant_ids.push_back(it2->second);
 				added_constant_hashes.erase(hash);
 			}
 
-			free(*it);
-			active_strs.erase(it); //it is still valid, weird google standard/convention not to invalidate it
+			free(str);
+			it = active_strs.erase(it);
 		}
+		else
+			it++;
 	}
 
 	//compact used tables
