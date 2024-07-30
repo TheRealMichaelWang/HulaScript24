@@ -259,6 +259,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 	table_offset = new_table_offset;
 	free_tables.clear();
+	available_table_ids.shrink_to_fit();
+	available_constant_ids.shrink_to_fit();
+	available_function_ids.shrink_to_fit();
 
 	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR) {
 		//remove unreachable functions
