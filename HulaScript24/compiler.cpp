@@ -58,22 +58,36 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		if (local_it != active_variables.end()) {
 			if (tokenizer.match_last(token_type::SET)) {
 				SCAN;
-				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 
-				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
-					std::stringstream ss;
-					ss << "Cannot set captured variable " << id << ", which was declared in " << func_decl_stack[local_it->second.func_id].name << ", not the current " << func_decl_stack.back().name << '.';
-					return error(etype::CANNOT_SET_CAPTURED, ss.str(), loc);
+				if (func_decl_stack.back().class_decl.has_value() && local_it->second.func_id == 0) {
+					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
+					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id_hash) });
+					UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+					current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 				}
-				
-				current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
+				else {
+					UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+
+					if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+						std::stringstream ss;
+						ss << "Cannot set captured variable " << id << ", which was declared in " << func_decl_stack[local_it->second.func_id].name << ", not the current " << func_decl_stack.back().name << '.';
+						return error(etype::CANNOT_SET_CAPTURED, ss.str(), loc);
+					}
+
+					current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
+				}
 				if (expects_statement) {
 					current_section.push_back({ .op = opcode::DISCARD_TOP });
 				}
 				return std::nullopt;
 			}
 			else {
-				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+				if (func_decl_stack.back().class_decl.has_value() && local_it->second.func_id == 0) {
+					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
+					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id_hash) });
+					current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
+				}
+				else if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
 					function_declaration& current_func = func_decl_stack.back();
 
 					for (uint32_t i = (uint32_t)(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {

@@ -130,8 +130,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="compiler.h" />
+    <ClInclude Include="error.h" />
     <ClInclude Include="instance.h" />
     <ClInclude Include="hash.h" />
+    <ClInclude Include="instructions.h" />
     <ClInclude Include="repl.h" />
     <ClInclude Include="sparsepp\spp.h" />
     <ClInclude Include="sparsepp\spp_config.h" />
