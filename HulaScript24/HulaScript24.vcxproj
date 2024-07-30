@@ -134,6 +134,15 @@
     <ClInclude Include="instance.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="repl.h" />
+    <ClInclude Include="sparsepp\spp.h" />
+    <ClInclude Include="sparsepp\spp_config.h" />
+    <ClInclude Include="sparsepp\spp_dlalloc.h" />
+    <ClInclude Include="sparsepp\spp_memory.h" />
+    <ClInclude Include="sparsepp\spp_smartptr.h" />
+    <ClInclude Include="sparsepp\spp_stdint.h" />
+    <ClInclude Include="sparsepp\spp_timer.h" />
+    <ClInclude Include="sparsepp\spp_traits.h" />
+    <ClInclude Include="sparsepp\spp_utils.h" />
     <ClInclude Include="tokenizer.h" />
     <ClInclude Include="value.h" />
   </ItemGroup>

@@ -6,9 +6,9 @@
 
 using namespace HulaScript::Compilation;
 
-compiler::compiler(instance& target_instance, bool report_src_locs) : max_globals(0), max_instruction(0), repl_stop_parsing(false), target_instance(target_instance), report_src_locs(report_src_locs) {
+compiler::compiler(instance& target_instance, bool report_src_locs) : max_globals(0), max_instruction(0), repl_stop_parsing(false), target_instance(target_instance), report_src_locs(report_src_locs), active_variables(16), class_decls(8) {
 	scope_stack.push_back({ });
-	func_decl_stack.push_back({ .name = "top level local context", .max_locals = 0});
+	func_decl_stack.push_back({ .name = "top level local context", .max_locals = 0, .captured_vars = spp::sparse_hash_set<uint64_t>(4)});
 }
 
 #define UNWRAP_RES_AND_HANDLE(RESNAME, RES, HANDLE) auto RESNAME = RES; if(std::holds_alternative<error>(RESNAME)) { HANDLE; return std::get<error>(RESNAME); }
@@ -526,6 +526,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	func_decl_stack.push_back({
 		.name = name,
 		.max_locals = (uint32_t)(1 + param_ids.size()),
+		.captured_vars = spp::sparse_hash_set<uint64_t>(4)
 	});
 	scope_stack.push_back({ .symbol_names = param_hashes });
 
@@ -606,7 +607,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 
 std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 	std::vector<instruction> repl_section;
-	max_instruction = target_instance.loaded_instructions.size();
+	max_instruction = (uint32_t)target_instance.loaded_instructions.size();
 	
 	std::map<uint32_t, source_loc> ip_src_map;
 	while (!repl_stop_parsing && !tokenizer.match_last(token_type::END_OF_SOURCE))
@@ -741,12 +742,12 @@ void compiler::unwind_error() {
 	for (auto& local : declared_toplevel_locals) {
 		active_variables.erase(local);
 	}
-	func_decl_stack.back().max_locals -= declared_toplevel_locals.size();
+	func_decl_stack.back().max_locals -= (uint32_t)declared_toplevel_locals.size();
 	declared_toplevel_locals.clear();
 	for (auto& global : declared_globals) {
 		active_variables.erase(global);
 	}
-	max_globals -= declared_globals.size();
+	max_globals -= (uint32_t)declared_globals.size();
 	declared_globals.clear();
 
 	target_instance.loaded_instructions.erase(target_instance.loaded_instructions.begin() + max_instruction, target_instance.loaded_instructions.end());

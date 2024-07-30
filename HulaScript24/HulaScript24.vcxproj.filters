@@ -36,6 +36,9 @@
     <ClInclude Include="value.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="compact_map.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="sparsepp\spp.h">
       <Filter>Header Files\sparsepp</Filter>
     </ClInclude>
