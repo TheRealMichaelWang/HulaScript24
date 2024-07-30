@@ -221,19 +221,19 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	for (auto it = active_strs.begin(); it != active_strs.end();)
 	{
 		if (!marked_strs.contains(*it)) {
-			char* str = *it;
-			uint64_t hash = hash_combine(str_hash(str), vtype::STRING);
+			uint64_t hash = hash_combine(str_hash(*it), vtype::STRING);
 			auto it2 = added_constant_hashes.find(hash);
 			if (it2 != added_constant_hashes.end()) {
 				available_constant_ids.push_back(it2->second);
 				added_constant_hashes.erase(hash);
 			}
 
-			free(str);
+			free(*it);
 			it = active_strs.erase(it);
 		}
-		else
+		else {
 			it++;
+    }
 	}
 
 	//compact used tables

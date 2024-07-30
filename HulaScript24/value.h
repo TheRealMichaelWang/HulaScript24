@@ -23,6 +23,7 @@ namespace HulaScript::Runtime {
 		value(bool b) : _type(vtype::NUMBER), func_id(0), data({.number = b ? 1.0 : 0.0}) { }
 
 		value(char* raw_cstr) : _type(vtype::STRING), func_id(0), data({.str = raw_cstr}) { }
+		value(std::string str) : value((char*)str.c_str()) { }
 		value(uint64_t raw_table_id) : _type(vtype::TABLE), func_id(0), data({.table_id = raw_table_id}) { }
 		value(uint32_t raw_func_id, uint64_t raw_table_id) : _type(vtype::CLOSURE), func_id(raw_func_id), data({.table_id = raw_table_id}) { }
 
