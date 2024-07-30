@@ -5,10 +5,8 @@
 #include <optional>
 #include <variant>
 #include <vector>
-#include <set>
 #include <map>
-#include <unordered_set>
-#include <unordered_map>
+#include "sparsepp/spp.h"
 
 #include "tokenizer.h"
 #include "instance.h"
@@ -32,7 +30,7 @@ namespace HulaScript::Compilation {
 		struct function_declaration {
 			std::string name;
 			uint32_t max_locals;
-			std::unordered_set<uint64_t> captured_vars;
+			spp::sparse_hash_set<uint64_t> captured_vars;
 		};
 
 		struct lexical_scope {
@@ -55,8 +53,8 @@ namespace HulaScript::Compilation {
 		bool report_src_locs;
 		uint32_t max_globals;
 
-		std::unordered_map<uint64_t, class_declaration> class_decls;
-		std::unordered_map<uint64_t, variable_symbol> active_variables;
+		spp::sparse_hash_map<uint64_t, class_declaration> class_decls;
+		spp::sparse_hash_map<uint64_t, variable_symbol> active_variables;
 		std::vector<lexical_scope> scope_stack;
 		std::vector<function_declaration> func_decl_stack;
 		std::vector<loop_scope> loop_stack;

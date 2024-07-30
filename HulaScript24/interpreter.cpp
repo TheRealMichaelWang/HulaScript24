@@ -348,8 +348,8 @@ std::variant<value, error> instance::execute() {
 			loaded_function_entry entry = {
 				.start_address = ip + 1
 			};
-			std::set<uint32_t> referenced_func_ids;
-			std::set<char*> referenced_strs;
+			spp::sparse_hash_set<uint32_t> referenced_func_ids;
+			spp::sparse_hash_set<char*> referenced_strs;
 			do {
 				switch (instructions[end_addr].op)
 				{
