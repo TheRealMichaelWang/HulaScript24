@@ -353,6 +353,8 @@ std::variant<value, error> instance::execute() {
 			do {
 				switch (instructions[end_addr].op)
 				{
+				case opcode::CALL_NO_CAPUTRE_TABLE:
+					[[fallthrough]];
 				case opcode::MAKE_CLOSURE:
 					referenced_func_ids.insert(instructions[end_addr].operand);
 					break;
@@ -423,6 +425,14 @@ std::variant<value, error> instance::execute() {
 				goto stop_exec;
 			}
 
+			local_offset += extended_local_offset;
+			extended_offsets.push_back(extended_local_offset);
+			extended_local_offset = 0;
+			ip = fn_entry.start_address;
+			continue;
+		}
+		case opcode::CALL_NO_CAPUTRE_TABLE: {
+			loaded_function_entry& fn_entry = function_entries[ins.operand];
 			local_offset += extended_local_offset;
 			extended_offsets.push_back(extended_local_offset);
 			extended_local_offset = 0;

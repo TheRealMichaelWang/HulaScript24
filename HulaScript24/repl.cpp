@@ -21,7 +21,10 @@ std::variant<bool, Compilation::error> repl_instance::write_input(std::string in
 				expected_closing_toks.push_back(Compilation::token_type::END_BLOCK);
 				expected_closing_toks.push_back(Compilation::token_type::DO);
 				break;
+			case Compilation::token_type::CLASS:
+				[[fallthrough]];
 			case Compilation::token_type::IF:
+				[[fallthrough]];
 			case Compilation::token_type::FUNCTION:
 				expected_closing_toks.push_back(Compilation::token_type::END_BLOCK);
 				break;

@@ -6,7 +6,7 @@
 
 using namespace HulaScript::Compilation;
 
-compiler::compiler(instance& target_instance, bool report_src_locs) : max_globals(0), max_instruction(0), repl_stop_parsing(false), target_instance(target_instance), report_src_locs(report_src_locs), active_variables(16), class_decls(8) {
+compiler::compiler(instance& target_instance, bool report_src_locs) : max_globals(0), max_instruction(0), repl_stop_parsing(false), target_instance(target_instance), report_src_locs(report_src_locs), active_variables(16) {
 	scope_stack.push_back({ });
 	func_decl_stack.push_back({ .name = "top level local context", .max_locals = 0, .captured_vars = spp::sparse_hash_set<uint64_t>(4)});
 }
@@ -47,6 +47,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 	source_loc loc = tokenizer.last_token_loc();
 
 	ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+	bool value_is_self = false;
 	switch (token.type)
 	{
 	case token_type::IDENTIFIER: {
@@ -59,36 +60,26 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			if (tokenizer.match_last(token_type::SET)) {
 				SCAN;
 
-				if (func_decl_stack.back().class_decl.has_value() && local_it->second.func_id == 0) {
-					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
-					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id_hash) });
-					UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-					current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
+				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+					std::stringstream ss;
+					ss << "Cannot set captured variable " << id << ", which was declared in " << func_decl_stack[local_it->second.func_id].name << ", not the current " << func_decl_stack.back().name << '.';
+					return error(etype::CANNOT_SET_CAPTURED, ss.str(), loc);
 				}
-				else {
-					UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 
-					if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
-						std::stringstream ss;
-						ss << "Cannot set captured variable " << id << ", which was declared in " << func_decl_stack[local_it->second.func_id].name << ", not the current " << func_decl_stack.back().name << '.';
-						return error(etype::CANNOT_SET_CAPTURED, ss.str(), loc);
-					}
-
-					current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
-				}
+				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+				current_section.push_back({ .op = local_it->second.is_global ? opcode::STORE_GLOBAL : opcode::STORE_LOCAL, .operand = local_it->second.local_id });
 				if (expects_statement) {
 					current_section.push_back({ .op = opcode::DISCARD_TOP });
 				}
 				return std::nullopt;
 			}
 			else {
-				if (func_decl_stack.back().class_decl.has_value() && local_it->second.func_id == 0) {
-					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
-					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id_hash) });
-					current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
-				}
-				else if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
+				if (!local_it->second.is_global && local_it->second.func_id < func_decl_stack.size() - 1) {
 					function_declaration& current_func = func_decl_stack.back();
+
+					if (current_func.class_decl.has_value()) {
+						return error(etype::CANNOT_CAPTURE_VAR, "Cannot capture variable from within a class method.", loc);
+					}
 
 					for (uint32_t i = (uint32_t)(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {
 						auto capture_it = func_decl_stack[i].captured_vars.find(id_hash);
@@ -108,11 +99,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			}
 		}
 		else {
-			auto class_it = class_decls.find(id_hash);
-			if (class_it != class_decls.end()) {
-				return std::nullopt;
-			}
-			else if (tokenizer.match_last(token_type::SET) && (expects_statement || repl_mode)) { //declare variable here
+			if (tokenizer.match_last(token_type::SET) && (expects_statement || repl_mode)) { //declare variable here
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 
@@ -142,6 +129,14 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			}
 		}
 	}
+	case token_type::SELF:
+		if (!func_decl_stack.back().class_decl.has_value() || func_decl_stack.size() != 2) {
+			return error(etype::UNEXPECTED_TOKEN, "Self keyword cannot be used outside of a class method.", loc);
+		}
+		SCAN;
+		current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
+		value_is_self = true;
+		break;
 	case token_type::MINUS:
 		SCAN;
 		if (tokenizer.match_last(token_type::NUMBER)) {
@@ -263,8 +258,30 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		SCAN;
 		std::stringstream ss;
 		ss << "Anonymous function literal in " << func_decl_stack.back().name;
-		UNWRAP(compile_function(ss.str(), tokenizer, current_section));
+		UNWRAP(compile_function(ss.str(), tokenizer, current_section, std::nullopt, loc));
 		break;
+	}
+	case token_type::IF: {
+		SCAN;
+		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+
+		MATCH_AND_SCAN(token_type::THEN);
+		uint32_t cond_check_ip = (uint32_t)current_section.size();
+		current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
+		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+		uint32_t jump_final_ip = (uint32_t)current_section.size();
+		current_section.push_back({ .op = opcode::JUMP_AHEAD });
+
+		MATCH_AND_SCAN(token_type::ELSE);
+		current_section[cond_check_ip].operand = (uint32_t)(current_section.size() - cond_check_ip);
+		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+		current_section[jump_final_ip].operand = (uint32_t)(current_section.size() - jump_final_ip);
+		
+		if (expects_statement) {
+			return error(etype::UNEXPECTED_VALUE, "Expected statement, but got if-else value instead.", loc);
+		}
+		
+		return std::nullopt;
 	}
 	default:
 		return tokenizer.make_unexpected_tok_err(std::nullopt);
@@ -282,6 +299,11 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			SCAN;
 			MATCH(token_type::IDENTIFIER);
 			uint64_t prop_hash = str_hash(tokenizer.last_token().str().c_str());
+			if (value_is_self && !func_decl_stack.back().class_decl.value()->properties.contains(prop_hash)) {
+				std::stringstream ss;
+				ss << "Class " << func_decl_stack.back().class_decl.value()->name << " doesn't have property " << tokenizer.last_token().str() << '.';
+				return error(etype::SYMBOL_NOT_FOUND, ss.str(), tokenizer.last_token_loc());
+			}
 			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(prop_hash) });
 			SCAN;
 
@@ -297,8 +319,9 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			else {
 				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				is_statement = false;
+				value_is_self = false;
+				break;
 			}
-			break;
 		}
 		case token_type::OPEN_BRACKET: {
 			SCAN;
@@ -318,8 +341,9 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				is_statement = false;
+				value_is_self = false;
+				break;
 			}
-			break;
 		}
 		case token_type::OPEN_PAREN: {
 			SCAN;
@@ -340,28 +364,10 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 			current_section.push_back({ .op = opcode::CALL, .operand = length });
 			is_statement = true;
+			value_is_self = false;
 			break;
 		}
-		case token_type::QUESTION:
-		{
-			SCAN;
-			uint32_t cond_ins_ip = (uint32_t)current_section.size();
-			current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
-
-			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false)); //if true value
-			uint32_t jump_to_end_ip = (uint32_t)current_section.size();
-			current_section.push_back({ .op = opcode::JUMP_AHEAD });
-
-			MATCH_AND_SCAN(token_type::COLON);
-			current_section[cond_ins_ip].operand = (uint32_t)(current_section.size() - cond_ins_ip);
-			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false)); //if false value
-			current_section[jump_to_end_ip].operand = (uint32_t)(current_section.size() - jump_to_end_ip);
-			is_statement = false;
-
-			goto return_immediatley;
-		}
 		default:
-		return_immediatley:
 			if (expects_statement) {
 				if (is_statement) {
 					current_section.push_back({ .op = opcode::DISCARD_TOP });
@@ -520,7 +526,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 	}
 };
 
-std::optional<error> compiler::compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section) {
+std::optional<error> compiler::compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section, std::optional<class_declaration*> class_decl, source_loc begin_loc) {
 	std::vector<std::string> param_ids;
 	std::vector<uint64_t> param_hashes;
 	MATCH_AND_SCAN(token_type::OPEN_PAREN); 
@@ -542,7 +548,8 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	func_decl_stack.push_back({
 		.name = name,
 		.max_locals = (uint32_t)(1 + param_ids.size()),
-		.captured_vars = spp::sparse_hash_set<uint64_t>(4)
+		.captured_vars = spp::sparse_hash_set<uint64_t>(4),
+		.class_decl = class_decl
 	});
 	scope_stack.push_back({ .symbol_names = param_hashes });
 
@@ -585,6 +592,21 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
 		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
 		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
+		
+		if (class_decl.has_value()) {
+			if (name == "construct") {
+				if (class_decl.value()->constructor.has_value()) {
+					std::stringstream ss;
+					ss << "A constructor for class " << class_decl.value()->name << "; cannot redeclare constructor.";
+					return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), begin_loc);
+				}
+				class_decl.value()->constructor = std::make_pair(func_id, (uint32_t)param_ids.size());
+			}
+			else {
+				uint64_t name_hash = str_hash(name.c_str());
+				class_decl.value()->methods.insert({ name_hash, func_id });
+			}
+		}
 
 		if (report_src_locs) {
 			for (std::pair<uint32_t, source_loc> loc : function_src_locs) {
@@ -592,32 +614,147 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			}
 		}
 
-		uint32_t capture_size = (uint32_t)func_decl_stack.back().captured_vars.size();
-		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = capture_size });
+		if (!class_decl.has_value()) { //handle captured variables
+			uint32_t capture_size = (uint32_t)func_decl_stack.back().captured_vars.size();
+			current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = capture_size });
 
-		for (auto& captured_var : func_decl_stack.back().captured_vars) {
-			current_section.push_back({ .op = opcode::DUPLICATE });
+			for (auto& captured_var : func_decl_stack.back().captured_vars) {
+				current_section.push_back({ .op = opcode::DUPLICATE });
 
-			auto var_it = active_variables.find(captured_var);
-			uint32_t prop_str_id = target_instance.add_constant_strhash(captured_var);
-			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
+				auto var_it = active_variables.find(captured_var);
+				uint32_t prop_str_id = target_instance.add_constant_strhash(captured_var);
+				current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
 
-			if (var_it->second.func_id < func_decl_stack.size() - 2) { //this is a captured 
-				current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table
-				current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id});
-				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
+				if (var_it->second.func_id < func_decl_stack.size() - 2) { //this is a captured 
+					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 }); //load capture table
+					current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_str_id });
+					current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
+				}
+				else { //load local 
+					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = var_it->second.local_id });
+				}
+
+				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
+				current_section.push_back({ .op = opcode::DISCARD_TOP });
 			}
-			else { //load local 
-				current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = var_it->second.local_id });
-			}
 
-			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
-			current_section.push_back({ .op = opcode::DISCARD_TOP });
+			current_section.push_back({ .op = opcode::MAKE_CLOSURE, .operand = func_id });
 		}
-
-		current_section.push_back({ .op = opcode::MAKE_CLOSURE, .operand = func_id });
 	}
 	func_decl_stack.pop_back();
+	return std::nullopt;
+}
+
+std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map) {
+	assert(func_decl_stack.size() == 1);
+	MATCH_AND_SCAN(token_type::CLASS);
+	MATCH(token_type::IDENTIFIER);
+
+	class_declaration declaration = {
+		.name = tokenizer.last_token().str(),
+		.properties = spp::sparse_hash_set<uint64_t>(12),
+		.methods = spp::sparse_hash_map<uint64_t, uint32_t>(4),
+	};
+	uint64_t name_hash = str_hash(declaration.name.c_str());
+	variable_symbol sym = {
+		.name = declaration.name,
+		.is_global = true,
+		.local_id = max_globals
+	};
+	active_variables.insert({name_hash, sym});
+	max_globals++;
+	declared_globals.push_back(name_hash);
+	SCAN;
+
+	spp::sparse_hash_set<uint64_t> default_value_properties;
+	std::vector<uint64_t> ordered_properties;
+	
+	uint32_t alloc_table_ip = (uint32_t)current_section.size();
+	current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
+	while (tokenizer.match_last(token_type::IDENTIFIER))
+	{
+		uint64_t id = str_hash(tokenizer.last_token().str().c_str());
+
+		if (declaration.properties.contains(id)) {
+			std::stringstream ss;
+			ss << "Class " << declaration.name << " already defines property " << tokenizer.last_token().str() << "; cannot redefine property.";
+			return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), tokenizer.last_token_loc());
+		}
+
+		declaration.properties.insert(id);
+		ordered_properties.push_back(id);
+		SCAN;
+
+		if (tokenizer.match_last(token_type::SET)) {
+			SCAN;
+			current_section.push_back({ .op = opcode::DUPLICATE });
+			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(id) });
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
+			current_section.push_back({ .op = opcode::DISCARD_TOP });
+			default_value_properties.insert(id);
+		}
+	}
+	current_section[alloc_table_ip].operand = (uint32_t)default_value_properties.size();
+
+	while (tokenizer.match_last(token_type::FUNCTION))
+	{
+		source_loc func_begin = tokenizer.last_token_loc();
+		SCAN;
+		MATCH_AND_SCAN(token_type::IDENTIFIER);
+		std::string name = tokenizer.last_token().str();
+		SCAN;
+
+		UNWRAP(compile_function(name, tokenizer, current_section, &declaration, func_begin));
+	}
+	MATCH_AND_SCAN(token_type::END_BLOCK);
+
+	std::vector<instruction> func_instructions;
+	uint32_t func_id = target_instance.emit_function_start(func_instructions);
+	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
+	
+	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = (uint32_t)declaration.properties.size() });
+	for (uint64_t id : default_value_properties) {
+		uint32_t prop_hash_id = target_instance.add_constant_strhash(id);
+		func_instructions.push_back({ .op = opcode::DUPLICATE });
+		func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_hash_id});
+		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
+		func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_hash_id });
+		func_instructions.push_back({ .op = opcode::LOAD_TABLE_ELEM });
+		func_instructions.push_back({ .op = opcode::STORE_TABLE_ELEM });
+		func_instructions.push_back({ .op = opcode::DISCARD_TOP });
+	}
+	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 1 });
+
+	uint32_t param_length;
+	if (declaration.constructor.has_value()) {
+		auto constructor = declaration.constructor.value();
+		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
+		func_instructions.push_back({ .op = opcode::CALL_NO_CAPUTRE_TABLE, .operand = constructor.first });
+		func_instructions.push_back({ .op = opcode::DISCARD_TOP });
+		param_length = constructor.second;
+	}
+	else {
+		for (auto it = ordered_properties.rbegin(); it != ordered_properties.rend(); it++) {
+			if (!default_value_properties.contains(*it)) {
+				func_instructions.push_back({ .op = opcode::PUSH_SCRATCHPAD });
+				func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
+				func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(*it) });
+				func_instructions.push_back({ .op = opcode::POP_SCRATCHPAD });
+				func_instructions.push_back({ .op = opcode::STORE_TABLE_ELEM });
+				func_instructions.push_back({ .op = opcode::DISCARD_TOP });
+			}
+		}
+		param_length = (uint32_t)(ordered_properties.size() - default_value_properties.size());
+	}
+	func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
+	func_instructions.push_back({ .op = opcode::RETURN });
+	func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = param_length });
+
+	target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
+
+	current_section.push_back({ .op = opcode::MAKE_CLOSURE, .operand = func_id });
+	current_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
 	return std::nullopt;
 }
 
@@ -649,8 +786,10 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 				.is_global = true,
 				.local_id = max_globals
 			};
-			active_variables.insert({ str_hash(id.c_str()), sym});
+			uint64_t hash = str_hash(id.c_str());
+			active_variables.insert({ hash, sym});
 			max_globals++;
+			declared_globals.push_back(hash);
 
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
 
@@ -677,10 +816,13 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 			max_globals++;
 			declared_globals.push_back(hash);
 
-			UNWRAP_AND_HANDLE(compile_function(id, tokenizer, repl_section), unwind_error());
+			UNWRAP_AND_HANDLE(compile_function(id, tokenizer, repl_section, std::nullopt, begin_loc), unwind_error());
 			repl_section.push_back({ .op = opcode::DECL_GLOBAL, .operand = sym.local_id });
 			break;
 		}
+		case token_type::CLASS:
+			UNWRAP_AND_HANDLE(compile_class(tokenizer, repl_section, ip_src_map), unwind_error());
+			break;
 		default:
 			UNWRAP_AND_HANDLE(compile_statement(tokenizer, repl_section, ip_src_map, repl_mode), unwind_error());
 			break;
@@ -775,12 +917,7 @@ void compiler::unwind_error() {
 
 std::optional<error> compiler::validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc) {
 	uint64_t hash = str_hash(id.c_str());
-	if (class_decls.contains(hash)) {
-		std::stringstream ss;
-		ss << "Cannot declare " << symbol_type << ": a class named " << id << " already exists.";
-		return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), loc);
-	}
-	else if (active_variables.contains(hash)) {
+	if (active_variables.contains(hash)) {
 		std::stringstream ss;
 		ss << "Cannot declare " << symbol_type << ": a variable named " << id << " already exists.";
 		return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), loc);

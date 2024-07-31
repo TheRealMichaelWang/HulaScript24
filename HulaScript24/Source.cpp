@@ -13,7 +13,8 @@ int main() {
 
 		auto input_res = instance.write_input(line);
 		if (std::holds_alternative<HulaScript::Compilation::error>(input_res)) {
-			//handle error
+			auto compilation_err = std::get<HulaScript::Compilation::error>(input_res);
+			std::cout << compilation_err.to_print_string() << std::endl;
 		}
 		else if(std::get<bool>(input_res)) {
 			auto run_res = instance.run();

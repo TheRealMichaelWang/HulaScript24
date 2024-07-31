@@ -24,14 +24,17 @@ namespace HulaScript::Compilation {
 
 		struct class_declaration {
 			std::string name;
-			std::vector<std::string> properties;
+			spp::sparse_hash_set<uint64_t> properties;
+			spp::sparse_hash_map<uint64_t, uint32_t> methods;
+
+			std::optional<std::pair<uint32_t, uint32_t>> constructor = std::nullopt;
 		};
 
 		struct function_declaration {
 			std::string name;
 			uint32_t max_locals;
 			spp::sparse_hash_set<uint64_t> captured_vars;
-			std::optional<class_declaration> class_decl = std::nullopt;
+			std::optional<class_declaration*> class_decl = std::nullopt;
 		};
 
 		struct lexical_scope {
@@ -54,7 +57,6 @@ namespace HulaScript::Compilation {
 		bool report_src_locs;
 		uint32_t max_globals;
 
-		spp::sparse_hash_map<uint64_t, class_declaration> class_decls;
 		spp::sparse_hash_map<uint64_t, variable_symbol> active_variables;
 		std::vector<lexical_scope> scope_stack;
 		std::vector<function_declaration> func_decl_stack;
@@ -69,7 +71,8 @@ namespace HulaScript::Compilation {
 		std::optional<error> compile_value(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, bool expects_statement, bool repl_mode);
 		std::optional<error> compile_expression(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, int min_prec, bool repl_mode);
 		std::optional<error> compile_statement(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, bool repl_mode);
-		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section);
+		std::optional<error> compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section, std::optional<class_declaration*> class_decl, source_loc begin);
+		std::optional<error> compile_class(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map);
 		std::optional<error> compile_block(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, bool(*stop_cond)(token_type));
 
 		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins);

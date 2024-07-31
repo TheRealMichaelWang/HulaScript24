@@ -55,6 +55,7 @@ namespace HulaScript::Compilation {
 		SYMBOL_NOT_FOUND,
 		SYMBOL_ALREADY_EXISTS,
 		CANNOT_SET_CAPTURED,
+		CANNOT_CAPTURE_VAR
 	};
 
 	class error {
