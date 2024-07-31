@@ -165,7 +165,7 @@ std::variant<value, error> instance::execute() {
 
 		//other miscellaneous operations
 		case opcode::LOAD_CONSTANT:
-			evaluation_stack.push_back(constants[ins.operand]);
+			evaluation_stack.push_back(constants.unsafe_get(ins.operand));
 			goto next_ins;
 		case opcode::PUSH_NIL:
 			evaluation_stack.push_back(value());
@@ -195,7 +195,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.table_id()];
+			table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_key_hash();
 
 			uint32_t low = 0;
@@ -227,7 +227,7 @@ std::variant<value, error> instance::execute() {
 
 			LOAD_OPERAND(table_val, vtype::TABLE);
 
-			table_entry& table_entry = table_entries[table_val.table_id()];
+			table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_key_hash();
 
 			evaluation_stack.push_back(store_val);
@@ -359,7 +359,7 @@ std::variant<value, error> instance::execute() {
 					referenced_func_ids.insert(instructions[end_addr].operand);
 					break;
 				case opcode::LOAD_CONSTANT: {
-					value& constant = constants[instructions[end_addr].operand];
+					value& constant = constants.unsafe_get(instructions[end_addr].operand);
 					if (constant.type() == vtype::STRING) {
 						referenced_strs.insert(constant.str());
 					}
@@ -387,7 +387,7 @@ std::variant<value, error> instance::execute() {
 			instruction end_ins = instructions[ip];
 			entry.parameter_count = end_ins.operand;
 
-			function_entries.insert({ id, entry });
+			function_entries.set(id, entry);
 
 			ip++;
 			continue;
@@ -409,7 +409,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.push_back(value(fn_closure.second));
 
 			return_stack.push_back(ip);
-			loaded_function_entry& fn_entry = function_entries[fn_closure.first];
+			loaded_function_entry& fn_entry = function_entries.unsafe_get(fn_closure.first);
 
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
 				std::stringstream ss;
@@ -432,7 +432,7 @@ std::variant<value, error> instance::execute() {
 			continue;
 		}
 		case opcode::CALL_NO_CAPUTRE_TABLE: {
-			loaded_function_entry& fn_entry = function_entries[ins.operand];
+			loaded_function_entry& fn_entry = function_entries.unsafe_get(ins.operand);
 			local_offset += extended_local_offset;
 			extended_offsets.push_back(extended_local_offset);
 			extended_local_offset = 0;
@@ -488,8 +488,10 @@ stop_exec:
 
 uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 	uint32_t id;
-	if (available_function_ids.empty())
-		id = max_function_id++;
+	if (available_function_ids.empty()) {
+		id = next_function_id++;
+		function_entries.resize(next_function_id);
+	}
 	else {
 		id = available_function_ids.back();
 		available_function_ids.pop_back();

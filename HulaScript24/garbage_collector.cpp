@@ -4,6 +4,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <cstring>
 #include "hash.h"
 #include "instance.h"
 
@@ -56,34 +57,29 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 
 	uint64_t id;
 	if (available_table_ids.empty()) {
-		id = max_table_id;
-		max_table_id++;
-
-		auto new_table_entries = (table_entry*)realloc(table_entries, max_table_id * sizeof(table_entry));
-		if (new_table_entries == NULL) {
-			free(ptr);
-			return std::nullopt;
-		}
-		table_entries = new_table_entries;
+		id = next_table_id;
+		next_table_id++;
+		table_entries.resize(next_table_id);
 	}
 	else {
 		id = available_table_ids.back();
 		available_table_ids.pop_back();
 	}
 
-	table_entries[id] = {
+	table_entry new_entry = {
 		.key_hashes = ptr,
 		.key_hash_capacity = element_count,
 		.used_elems = 0,
 		.block = res.value()
 	};
+	table_entries.set(id, new_entry);
 	
 	return id;
 }
 
 //elements are not initialized by default
 bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
-	table_entry& entry = table_entries[table_id];
+	table_entry& entry = table_entries.unsafe_get(table_id);
 
 	if (element_count > entry.block.allocated_capacity) { //expand allocation
 		std::optional<gc_block> alloc_res = allocate_block(element_count);
@@ -111,7 +107,7 @@ bool instance::reallocate_table(uint64_t table_id, uint32_t element_count) {
 
 bool instance::reallocate_table(uint64_t table_id, uint32_t max_elem_extend, uint32_t min_elem_extend) {
 	for (uint32_t size = max_elem_extend; size >= min_elem_extend; size--) {
-		if (reallocate_table(table_id, table_entries[table_id].block.allocated_capacity + size))
+		if (reallocate_table(table_id, table_entries.unsafe_get(table_id).block.allocated_capacity + size))
 			return true;
 	}
 	return false;
@@ -159,7 +155,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	{
 		uint64_t id = tables_to_mark.front();
 		tables_to_mark.pop();
-		instance::table_entry entry = table_entries[id];
+		table_entry& entry = table_entries.unsafe_get(id);
 
 		marked_tables.emplace(id);
 
@@ -187,8 +183,8 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
-		return function_entries[a].start_address < function_entries[b].start_address;
-		};
+		return function_entries.unsafe_get(a).start_address < function_entries.unsafe_get(b).start_address;
+	};
 	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
 	while (!functions_to_mark.empty()) {
 		uint32_t id = functions_to_mark.front();
@@ -198,22 +194,25 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			continue;
 		}
 		marked_functions.insert(id);
-		for (char* refed_str : function_entries[id].referenced_const_strs) {
+		for (char* refed_str : function_entries.unsafe_get(id).referenced_const_strs) {
 			marked_strs.insert(refed_str);
 		}
-		for (uint32_t refed_function : function_entries[id].referenced_func_ids) {
+		for (uint32_t refed_function : function_entries.unsafe_get(id).referenced_func_ids) {
 			functions_to_mark.push(refed_function);
 		}
 	}
 
 	//sweep unreachable tables
-	for (uint_fast64_t i = 0; i < max_table_id; i++) {
-		table_entry* current = &table_entries[i];
-		if (current->used_elems <= current->key_hash_capacity && !marked_tables.contains(i)) {
-			available_table_ids.push_back(i);
-			free(current->key_hashes);
-			current->used_elems = UINT32_MAX;
-			current->key_hash_capacity = 0;
+	for (auto it = table_entries.ne_cbegin(); it != table_entries.ne_cend();) {
+		size_t pos = table_entries.get_pos(it);
+		if (!marked_tables.contains(pos)) {
+			available_table_ids.push_back(pos);
+
+			free(it->key_hashes);
+			it = table_entries.erase(it);
+		}
+		else {
+			it++;
 		}
 	}
 
@@ -227,7 +226,6 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				available_constant_ids.push_back(it2->second);
 				added_constant_hashes.erase(hash);
 			}
-
 			free(*it);
 			it = active_strs.erase(it);
 		}
@@ -241,11 +239,11 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	//sort table ids by table start address
 	std::vector<uint64_t> sorted_marked(marked_tables.begin(), marked_tables.end());
 	std::ranges::sort(sorted_marked, [this](uint64_t a, uint64_t b) -> bool {
-		return table_entries[a].block.table_start < table_entries[b].block.table_start;
+		return table_entries.unsafe_get(a).block.table_start < table_entries.unsafe_get(b).block.table_start;
 	});
 	size_t new_table_offset = 0;
 	for (uint64_t id : sorted_marked) {
-		instance::table_entry& entry = table_entries[id];
+		instance::table_entry& entry = table_entries.unsafe_get(id);
 
 		if (entry.block.table_start == new_table_offset) {
 			new_table_offset += entry.used_elems;
@@ -263,21 +261,26 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	available_constant_ids.shrink_to_fit();
 	available_function_ids.shrink_to_fit();
 
+	evaluation_stack.shrink_to_fit();
+	scratchpad_stack.shrink_to_fit();
+
 	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR) {
 		//remove unreachable functions
-		for (auto it = function_entries.begin(); it != function_entries.end();) {
-			if (!marked_functions.contains(it->first)) {
-				available_function_ids.push_back(it->first);
+		for (auto it = function_entries.ne_cbegin(); it != function_entries.ne_cend(); it++) {
+			size_t pos = function_entries.get_pos(it);
+			if (!marked_functions.contains(pos)) {
+				available_function_ids.push_back(pos);
 				it = function_entries.erase(it);
 			}
-			else
+			else {
 				it++;
+			}
 		}
 
 		//compact instructions of used functions only
 		uint32_t current_ip = 0;
 		for (uint32_t id : marked_functions) {
-			instance::loaded_function_entry& entry = function_entries[id];
+			instance::loaded_function_entry& entry = function_entries.unsafe_get(id);
 
 			if (entry.start_address == current_ip) {
 				current_ip += entry.length;
@@ -298,5 +301,6 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			it = ip_src_locs.erase(it);
 		}
 		loaded_instructions.erase(loaded_instructions.begin() + current_ip, loaded_instructions.end());
+		loaded_instructions.shrink_to_fit();
 	}
 }
