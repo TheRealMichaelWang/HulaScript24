@@ -35,6 +35,8 @@ namespace HulaScript::Runtime {
 		DECL_LOCAL,
 		DECL_GLOBAL,
 		UNWIND_LOCALS,
+		PROBE_LOCALS,
+		PROBE_GLOBALS,
 
 		//other miscellaneous operations
 		LOAD_CONSTANT,

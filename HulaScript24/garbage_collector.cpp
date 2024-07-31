@@ -143,6 +143,16 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		}
 		else {
 			evaluation_stack.clear();
+			if (return_stack.size() > 0) {
+				return_stack.clear();
+
+				while (!extended_offsets.empty())
+				{
+					extended_local_offset = extended_offsets.back();
+					local_offset -= extended_local_offset;
+					extended_offsets.pop_back();
+				}
+			}
 		}
 	}
 
@@ -263,6 +273,8 @@ void instance::garbage_collect(gc_collection_mode mode) {
 
 	evaluation_stack.shrink_to_fit();
 	scratchpad_stack.shrink_to_fit();
+	return_stack.shrink_to_fit();
+	extended_offsets.shrink_to_fit();
 
 	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR) {
 		//remove unreachable functions

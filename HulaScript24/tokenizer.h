@@ -25,6 +25,7 @@ namespace HulaScript::Compilation {
 		ELSE,
 		WHILE,
 		FOR,
+		IN,
 		DO,
 		RETURN,
 		LOOP_BREAK,

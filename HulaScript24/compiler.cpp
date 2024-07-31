@@ -558,6 +558,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	uint32_t func_id = target_instance.emit_function_start(func_instructions);
 
 	function_src_locs.insert({ 0, tokenizer.last_token_loc() });
+	func_instructions.push_back({ .op = opcode::PROBE_LOCALS });
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
 	uint32_t param_id = 1;
 	for (int_fast32_t i = (int_fast32_t)(param_ids.size() - 1); i >= 0; i--) {
@@ -575,7 +576,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
 		UNWRAP_AND_HANDLE(compile_statement(tokenizer, func_instructions, function_src_locs, false), {
-			unwind_locals(func_instructions, false);
+			unwind_locals(func_instructions, 0, false);
 			func_decl_stack.pop_back();
 			target_instance.available_function_ids.push_back(func_id);
 			tokenizer.current_function_name = std::nullopt;
@@ -583,11 +584,11 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	}
 	tokenizer.current_function_name = std::nullopt;
 	MATCH_AND_SCAN_AND_HANDLE(token_type::END_BLOCK, {
-		unwind_locals(func_instructions, false);
+		unwind_locals(func_instructions, 0, false);
 		func_decl_stack.pop_back();
 		target_instance.available_function_ids.push_back(func_id);
 	});
-	unwind_locals(func_instructions, false);
+	unwind_locals(func_instructions, 0, false);
 	{
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
 		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
@@ -832,6 +833,12 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 	if (repl_stop_parsing) {
 		repl_stop_parsing = false;
 	}
+	if (declared_toplevel_locals.size() > 0) {
+		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_LOCALS, .operand = (uint32_t)declared_toplevel_locals.size() });
+	}
+	if (declared_globals.size() > 0) {
+		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_GLOBALS, .operand = (uint32_t)declared_globals.size() });
+	}
 	uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
 	target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), repl_section.begin(), repl_section.end());
 	declared_globals.clear();
@@ -848,6 +855,8 @@ std::optional<error> compiler::compile_block(tokenizer& tokenizer, std::vector<i
 	std::optional<error> to_return = std::nullopt;
 
 	scope_stack.push_back({ }); //push empty lexical scope
+	uint32_t probe_ip = (uint32_t)current_section.size();
+	current_section.push_back({ .op = opcode::PROBE_LOCALS });
 	while (!stop_cond(tokenizer.last_token().type) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
 		to_return = compile_statement(tokenizer, current_section, ip_src_map, false);
@@ -856,13 +865,28 @@ std::optional<error> compiler::compile_block(tokenizer& tokenizer, std::vector<i
 	}
 	
 unwind_and_return:
-	unwind_locals(current_section, true);
+	unwind_locals(current_section, probe_ip, false);
 	return to_return;
 }
 
-void compiler::unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins) {
-	if (use_unwind_ins && scope_stack.back().symbol_names.size() > 0) {
-		instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
+void compiler::unwind_locals(std::vector<instruction>& instructions, uint32_t probe_ip, bool use_unwind_ins) {
+	if (use_unwind_ins) {
+		if (scope_stack.back().symbol_names.size() > 0) {
+			instructions[probe_ip].operand = (uint32_t)scope_stack.back().symbol_names.size();
+			instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
+		}
+		else {
+			auto it = instructions.erase(instructions.begin() + probe_ip);
+			for (; it != instructions.end(); it++) {
+				if (it->op == opcode::JUMP_BACK) {
+					uint32_t ip = (uint32_t)(it - instructions.begin());
+					uint32_t target_ip = ip - it->operand;
+					if (target_ip <= probe_ip) {
+						it->operand--;
+					}
+				}
+			}
+		}
 	}
 	for (uint64_t symbol : scope_stack.back().symbol_names) {
 		active_variables.erase(symbol);
