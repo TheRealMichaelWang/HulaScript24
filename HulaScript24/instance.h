@@ -63,7 +63,7 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> return_stack;
 		std::vector<uint32_t> extended_offsets;
 
-		std::vector<value> constants;
+		spp::sparsetable<value, SPP_DEFAULT_ALLOCATOR<value>> constants;
 		spp::sparse_hash_map<uint64_t, uint32_t> added_constant_hashes;
 		std::vector<uint32_t> available_constant_ids;
 
@@ -71,15 +71,15 @@ namespace HulaScript::Runtime {
 		size_t table_offset, max_table;
 
 		std::vector<instruction> loaded_instructions;
-		std::vector<uint32_t> available_function_ids;
-		uint32_t max_function_id;
-		
-		spp::sparse_hash_map<uint32_t, loaded_function_entry> function_entries;
 		std::map<uint32_t, source_loc> ip_src_locs;
-
-		table_entry* table_entries;
+		uint32_t next_function_id;
+		
+		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
+		std::vector<uint32_t> available_function_ids;
+		
+		spp::sparsetable<table_entry, SPP_DEFAULT_ALLOCATOR<table_entry>> table_entries;
 		std::vector<uint64_t> available_table_ids;
-		uint64_t max_table_id;
+		uint64_t next_table_id;
 		std::multimap<uint32_t, gc_block> free_tables;
 		spp::sparse_hash_set<char*> active_strs;
 
