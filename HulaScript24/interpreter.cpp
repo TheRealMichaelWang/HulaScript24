@@ -162,6 +162,20 @@ std::variant<value, error> instance::execute() {
 		case opcode::UNWIND_LOCALS:
 			extended_local_offset -= ins.operand;
 			goto next_ins;
+		case opcode::PROBE_LOCALS:
+			if (local_offset + extended_local_offset + ins.operand > max_locals) {
+				LOAD_SRC_LOC(src_loc, ip);
+				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", src_loc, ip);
+				goto stop_exec;
+			}
+			goto next_ins;
+		case opcode::PROBE_GLOBALS:
+			if (global_offset + ins.operand > max_locals) {
+				LOAD_SRC_LOC(src_loc, ip);
+				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", src_loc, ip);
+				goto stop_exec;
+			}
+			goto next_ins;
 
 		//other miscellaneous operations
 		case opcode::LOAD_CONSTANT:

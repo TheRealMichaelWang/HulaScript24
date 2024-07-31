@@ -75,7 +75,7 @@ namespace HulaScript::Compilation {
 		std::optional<error> compile_class(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map);
 		std::optional<error> compile_block(tokenizer& tokenizer, std::vector<instruction>& current_section, std::map<uint32_t, source_loc>& ip_src_map, bool(*stop_cond)(token_type));
 
-		void unwind_locals(std::vector<instruction>& instructions, bool use_unwind_ins);
+		void unwind_locals(std::vector<instruction>& instructions, uint32_t probe_ip, bool use_unwind_ins);
 		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions);
 		void unwind_error();
 
