@@ -63,6 +63,7 @@ namespace HulaScript::Runtime {
 		FUNCTION_END,
 		MAKE_CLOSURE,
 		CALL,
+		CALL_NO_CAPUTRE_TABLE,
 		RETURN,
 
 		//invalid

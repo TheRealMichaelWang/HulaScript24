@@ -18,6 +18,7 @@ namespace HulaScript::Compilation {
 		FUNCTION,
 		TABLE,
 		CLASS,
+		SELF,
 
 		IF,
 		ELIF,

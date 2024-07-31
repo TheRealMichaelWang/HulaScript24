@@ -54,7 +54,8 @@ std::string Compilation::error::to_print_string() {
 		"Unexpected Value",
 		"Symbol Not Found",
 		"Symbol Already Declared",
-		"Cannot Set Captured Variable"
+		"Cannot Set Captured Variable",
+		"Cannot Capture Variable"
 	};
 
 	std::stringstream ss;
