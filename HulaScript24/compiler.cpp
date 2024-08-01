@@ -191,62 +191,51 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		break;
 	case token_type::OPEN_BRACKET: {
 		SCAN;
+		uint32_t allocate_ins = (uint32_t)current_section.size();
+		current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
 		uint32_t length = 0;
 		while (!tokenizer.match_last(token_type::CLOSE_BRACKET) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 		{
 			if (length > 0) {
 				MATCH_AND_SCAN(token_type::COMMA);
 			}
-			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-			current_section.push_back({ .op = opcode::PUSH_SCRATCHPAD });
-			length++;
-		}
-		loc = tokenizer.last_token_loc();
-		MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
-
-		ip_src_map.insert({ (uint32_t)current_section.size(), loc });
-		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
-		for (uint_fast32_t i = length; i >= 1; i--) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
-
-			HulaScript::Runtime::value val((double)i);
+			HulaScript::Runtime::value val((double)length);
 			current_section.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_key(val) });
-			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 			current_section.push_back({ .op = opcode::DISCARD_TOP });
+			length++;
 		}
+		MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
+		current_section[allocate_ins].operand = length;
 		break;
 	}
 	case token_type::OPEN_BRACE: {
 		SCAN;
+		uint32_t allocate_ins = (uint32_t)current_section.size();
+		current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
 		uint32_t length = 0;
 		while (!tokenizer.match_last(token_type::CLOSE_BRACE) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 		{
 			if (length > 0) {
 				MATCH_AND_SCAN(token_type::COMMA);
 			}
+			current_section.push_back({ .op = opcode::DUPLICATE });
+
 			MATCH_AND_SCAN(token_type::OPEN_BRACE);
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-			current_section.push_back({ .op = opcode::PUSH_SCRATCHPAD });
 			MATCH_AND_SCAN(token_type::COMMA);
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-			current_section.push_back({ .op = opcode::PUSH_SCRATCHPAD });
 			MATCH_AND_SCAN(token_type::CLOSE_BRACE);
-			length++;
-		}
-		loc = tokenizer.last_token_loc();
-		MATCH_AND_SCAN(token_type::CLOSE_BRACE);
 
-		ip_src_map.insert({ (uint32_t)current_section.size(), loc });
-		current_section.push_back({ .op = opcode::REVERSE_SCRATCHPAD, .operand = (length * 2)});
-		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
-		for (uint_fast32_t i = 0; i < length; i++) {
-			current_section.push_back({ .op = opcode::DUPLICATE });
-			current_section.push_back({ .op = opcode::POP_SCRATCHPAD }); //pop key
-			current_section.push_back({ .op = opcode::POP_SCRATCHPAD }); //pop value
 			current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 			current_section.push_back({ .op = opcode::DISCARD_TOP });
+
+			length++;
 		}
+		MATCH_AND_SCAN(token_type::CLOSE_BRACE);
+		current_section[allocate_ins].operand = length;
 		break;
 	}
 	case token_type::OPEN_PAREN:
@@ -585,6 +574,11 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 };
 
 std::optional<error> compiler::compile_function(std::string name, tokenizer& tokenizer, std::vector<instruction>& current_section, std::optional<class_declaration*> class_decl, source_loc begin_loc) {
+	if (name == "constructor" && class_decl.has_value() && class_decl.value()->constructor.has_value()) {
+		std::stringstream ss;
+		ss << "A constructor for class " << class_decl.value()->name << "; cannot redeclare constructor.";
+		return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), begin_loc);
+	}
 	std::vector<std::string> param_ids;
 	std::vector<uint64_t> param_hashes;
 	MATCH_AND_SCAN(token_type::OPEN_PAREN); 
@@ -629,6 +623,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		};
 		active_variables.insert({ str_hash(param_ids[i].c_str()), sym });
 		func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
+		param_id++;
 	}
 
 	while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE))
@@ -648,18 +643,11 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	});
 	unwind_locals(func_instructions, 0, false);
 	{
-		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
-		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
-		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
-		
 		if (class_decl.has_value()) {
 			if (name == "construct") {
-				if (class_decl.value()->constructor.has_value()) {
-					std::stringstream ss;
-					ss << "A constructor for class " << class_decl.value()->name << "; cannot redeclare constructor.";
-					return error(etype::SYMBOL_ALREADY_EXISTS, ss.str(), begin_loc);
-				}
 				class_decl.value()->constructor = std::make_pair(func_id, (uint32_t)param_ids.size());
+				func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
+				func_instructions.push_back({ .op = opcode::RETURN });
 			}
 			else {
 				uint64_t name_hash = str_hash(name.c_str());
@@ -667,6 +655,10 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			}
 		}
 
+		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
+		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
+		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
+		
 		if (report_src_locs) {
 			for (std::pair<uint32_t, source_loc> loc : function_src_locs) {
 				target_instance.ip_src_locs.insert({ old_size + loc.first, loc.second });
@@ -770,6 +762,8 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 
 	std::vector<instruction> func_instructions;
 	uint32_t func_id = target_instance.emit_function_start(func_instructions);
+	uint32_t probe_ip = (uint32_t)func_instructions.size();
+	func_instructions.push_back({ .op = opcode::PROBE_LOCALS });
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
 	
 	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = (uint32_t)(declaration.properties.size() + declaration.methods.size()) });
@@ -794,17 +788,18 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 	}
 
 	func_instructions.push_back({ .op = opcode::POP_SCRATCHPAD });
-	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 1 });
 
 	uint32_t param_length;
 	if (declaration.constructor.has_value()) {
 		auto constructor = declaration.constructor.value();
-		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
+		//func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
 		func_instructions.push_back({ .op = opcode::CALL_NO_CAPUTRE_TABLE, .operand = constructor.first });
-		func_instructions.push_back({ .op = opcode::DISCARD_TOP });
+		//func_instructions.push_back({ .op = opcode::DISCARD_TOP });
 		param_length = constructor.second;
 	}
 	else {
+		func_instructions[probe_ip].operand = 2;
+		func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 1 });
 		for (auto it = ordered_properties.rbegin(); it != ordered_properties.rend(); it++) {
 			if (!default_value_properties.contains(*it)) {
 				func_instructions.push_back({ .op = opcode::PUSH_SCRATCHPAD });
@@ -816,8 +811,8 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 			}
 		}
 		param_length = (uint32_t)(ordered_properties.size() - default_value_properties.size());
+		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
 	}
-	func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
 	func_instructions.push_back({ .op = opcode::RETURN });
 	func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = param_length });
 
