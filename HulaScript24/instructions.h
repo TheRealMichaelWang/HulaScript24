@@ -45,7 +45,6 @@ namespace HulaScript::Runtime {
 		PUSH_SCRATCHPAD,
 		POP_SCRATCHPAD,
 		PEEK_SCRATCHPAD,
-		REVERSE_SCRATCHPAD,
 		DUPLICATE,
 
 		//table operations
