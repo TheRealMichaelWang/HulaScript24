@@ -44,6 +44,7 @@ namespace HulaScript::Runtime {
 		DISCARD_TOP,
 		PUSH_SCRATCHPAD,
 		POP_SCRATCHPAD,
+		PEEK_SCRATCHPAD,
 		REVERSE_SCRATCHPAD,
 		DUPLICATE,
 
@@ -52,7 +53,6 @@ namespace HulaScript::Runtime {
 		STORE_TABLE_ELEM,
 		ALLOCATE_DYN,
 		ALLOCATE_FIXED,
-		ALLOCATE_LITERAL,
 
 		//control flow
 		COND_JUMP_AHEAD,

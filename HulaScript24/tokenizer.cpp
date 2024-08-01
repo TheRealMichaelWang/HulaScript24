@@ -155,6 +155,8 @@ std::variant<token, error> tokenizer::scan_token() {
 			return last_tok = token(token_type::GLOBAL);
 		case str_hash("self"):
 			return last_tok = token(token_type::SELF);
+		case str_hash("table"):
+			return last_tok = token(token_type::TABLE);
 		default:
 			return last_tok = token(identifier);
 		}
