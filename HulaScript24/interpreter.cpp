@@ -455,7 +455,11 @@ std::variant<value, error> instance::execute() {
 			continue;
 		}
 		case opcode::CALL_NO_CAPUTRE_TABLE: {
-			loaded_function_entry& fn_entry = function_entries.unsafe_get(ins.operand);
+			return_stack.push_back(ip);
+			loaded_function_entry& fn_entry = function_entries.unsafe_get(ins.operand); 
+			
+			//no parameter count check - use instruction at your own risk! 
+
 			local_offset += extended_local_offset;
 			extended_offsets.push_back(extended_local_offset);
 			extended_local_offset = 0;
