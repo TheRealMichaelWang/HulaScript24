@@ -79,6 +79,8 @@ namespace HulaScript::Compilation {
 		void unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions);
 		void unwind_error();
 
+		void emit_call_method(std::string method_name, std::vector<instruction>& instructions);
+
 		std::optional<error> validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc);
 	};
 }

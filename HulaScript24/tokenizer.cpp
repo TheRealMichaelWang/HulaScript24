@@ -137,6 +137,8 @@ std::variant<token, error> tokenizer::scan_token() {
 			return last_tok = token(token_type::WHILE);
 		case str_hash("for"):
 			return last_tok = token(token_type::FOR);
+		case str_hash("in"):
+			return last_tok = token(token_type::IN);
 		case str_hash("do"):
 			return last_tok = token(token_type::DO);
 		case str_hash("return"):
@@ -289,6 +291,7 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 		"ELSE",
 		"WHILE",
 		"FOR",
+		"IN",
 		"DO",
 		"RETURN",
 		"BREAK",

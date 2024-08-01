@@ -196,7 +196,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 			goto next_ins;
 		case opcode::REVERSE_SCRATCHPAD:
-			std::reverse(scratchpad_stack.begin(), scratchpad_stack.end());
+			std::reverse(scratchpad_stack.end() - ins.operand, scratchpad_stack.end());
 			goto next_ins;
 		case opcode::DUPLICATE:
 			evaluation_stack.push_back(evaluation_stack.back());

@@ -238,7 +238,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		MATCH_AND_SCAN(token_type::CLOSE_BRACE);
 
 		ip_src_map.insert({ (uint32_t)current_section.size(), loc });
-		current_section.push_back({ .op = opcode::REVERSE_SCRATCHPAD });
+		current_section.push_back({ .op = opcode::REVERSE_SCRATCHPAD, .operand = (length * 2)});
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
 		for (uint_fast32_t i = 0; i < length; i++) {
 			current_section.push_back({ .op = opcode::DUPLICATE });
@@ -478,11 +478,49 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 			SCAN;
 			jump_end_ips.pop_back();
 		}
-
+		
 		for (uint32_t ip : jump_end_ips) {
 			current_section[ip].operand = (uint32_t)(current_section.size() - ip);
 		}
 		return std::nullopt; 
+	}
+	case token_type::FOR: {
+		SCAN;
+		MATCH(token_type::IDENTIFIER);
+		std::string id = tokenizer.last_token().str();
+		uint64_t id_hash = str_hash(id.c_str());
+		SCAN;
+		MATCH_AND_SCAN(token_type::IN);
+		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
+		MATCH_AND_SCAN(token_type::DO);
+
+		scope_stack.push_back({ });
+		uint32_t probe_ip = (uint32_t)current_section.size();
+		current_section.push_back({ .op = opcode::PROBE_LOCALS });
+
+		current_section.push_back({ .op = opcode::DUPLICATE });
+		emit_call_method("end", current_section);
+
+
+		scope_stack.back().symbol_names.push_back(id_hash);
+		variable_symbol sym = {
+					.name = id,
+					.is_global = false,
+					.local_id = func_decl_stack.back().max_locals,
+					.func_id = (uint32_t)(func_decl_stack.size() - 1)
+		};
+		active_variables.insert({ id_hash, sym });
+		func_decl_stack.back().max_locals++;
+
+		current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
+
+		while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE)) {
+			UNWRAP_AND_HANDLE(compile_statement(tokenizer, current_section, ip_src_map, false), unwind_locals(current_section, probe_ip, false));
+		}
+		unwind_locals(current_section, probe_ip, true);
+		MATCH_AND_SCAN(token_type::END_BLOCK);
+
+		break;
 	}
 	case token_type::RETURN: {
 		if (func_decl_stack.size() == 0) {
@@ -865,7 +903,7 @@ std::optional<error> compiler::compile_block(tokenizer& tokenizer, std::vector<i
 	}
 	
 unwind_and_return:
-	unwind_locals(current_section, probe_ip, false);
+	unwind_locals(current_section, probe_ip, true);
 	return to_return;
 }
 
@@ -937,6 +975,13 @@ void compiler::unwind_error() {
 	for (auto it = target_instance.ip_src_locs.lower_bound(max_globals); it != target_instance.ip_src_locs.end();) {
 		it = target_instance.ip_src_locs.erase(it);
 	}
+}
+
+void compiler::emit_call_method(std::string method_name, std::vector<instruction>& instructions) {
+	uint64_t method_id_hash = str_hash(method_name.c_str());
+	instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(method_id_hash) });
+	instructions.push_back({ .op = opcode::LOAD_TABLE_ELEM });
+	instructions.push_back({ .op = opcode::CALL });
 }
 
 std::optional<error> compiler::validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc) {
