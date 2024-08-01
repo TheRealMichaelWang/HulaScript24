@@ -143,16 +143,8 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		}
 		else {
 			evaluation_stack.clear();
-			if (return_stack.size() > 0) {
-				return_stack.clear();
-
-				while (!extended_offsets.empty())
-				{
-					extended_local_offset = extended_offsets.back();
-					local_offset -= extended_local_offset;
-					extended_offsets.pop_back();
-				}
-			}
+			return_stack.clear();
+			extended_offsets.clear();
 		}
 	}
 

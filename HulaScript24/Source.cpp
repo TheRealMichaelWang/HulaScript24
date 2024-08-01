@@ -4,7 +4,7 @@
 #include "repl.h"
 
 int main() {
-	HulaScript::repl_instance instance("myInstance", 4096, 64, 1024);
+	HulaScript::repl_instance instance("myInstance", 4, 2, 8);
 
 	std::cout << ">>> ";
 	for (;;) {

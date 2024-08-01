@@ -10,6 +10,7 @@ std::variant<value, error> instance::execute() {
 
 	instruction* instructions = loaded_instructions.data();
 	uint_fast32_t ip = start_ip;
+	local_offset = 0;
 
 #define LOAD_SRC_LOC(RESULT, IP) std::optional<source_loc> RESULT = std::nullopt;\
 								{ auto RESULT##_it = ip_src_locs.upper_bound(IP);\
@@ -147,6 +148,10 @@ std::variant<value, error> instance::execute() {
 			global_elems[ins.operand] = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			goto next_ins;
+		case opcode::DECL_TOPLVL_LOCAL:
+			assert(local_offset == 0);
+			top_level_local_offset++;
+			[[fallthrough]];
 		case opcode::DECL_LOCAL:
 			assert(extended_local_offset == ins.operand);
 			local_elems[local_offset + extended_local_offset] = evaluation_stack.back();
@@ -509,12 +514,14 @@ stop_exec:
 	if (current_error.has_value()) {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
 		start_ip = (uint32_t)loaded_instructions.size();
+		extended_local_offset = top_level_local_offset;
 		return current_error.value();
 	}
 	else {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
 		start_ip = (uint32_t)loaded_instructions.size();
 		assert(evaluation_stack.size() == 1);
+		assert(top_level_local_offset == extended_local_offset);
 		value to_return = evaluation_stack.back();
 		evaluation_stack.pop_back();
 		return to_return;
