@@ -59,6 +59,7 @@ namespace HulaScript::Runtime {
 		JUMP_AHEAD,
 		COND_JUMP_BACK,
 		JUMP_BACK,
+		IF_NIL_JUMP_AHEAD,
 
 		//function 
 		FUNCTION,
@@ -71,7 +72,7 @@ namespace HulaScript::Runtime {
 		//invalid
 		INVALID
 	};
-
+	
 	struct instruction {
 		opcode op;
 		uint32_t operand;
