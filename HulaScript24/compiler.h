@@ -42,6 +42,7 @@ namespace HulaScript::Compilation {
 		};
 
 		struct loop_scope {
+			uint32_t max_local_count;
 			std::vector<uint32_t> break_requests;
 			std::vector<uint32_t> continue_requests;
 		};
