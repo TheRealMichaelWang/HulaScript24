@@ -361,6 +361,16 @@ std::variant<value, error> instance::execute() {
 			}
 			goto next_ins;
 		}
+		case opcode::IFNT_NIL_JUMP_AHEAD: {
+			if (evaluation_stack.back().type() == vtype::NIL) {
+				evaluation_stack.pop_back();
+				goto next_ins;
+			}
+			else {
+				ip += ins.operand;
+				continue;
+			}
+		}
 
 		//function operations
 		case opcode::FUNCTION:

@@ -59,6 +59,7 @@ namespace HulaScript::Runtime {
 		COND_JUMP_BACK,
 		JUMP_BACK,
 		IF_NIL_JUMP_AHEAD,
+		IFNT_NIL_JUMP_AHEAD, //opposite of if nil jump ahead 
 
 		//function 
 		FUNCTION,
