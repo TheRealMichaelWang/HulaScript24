@@ -72,7 +72,7 @@ namespace HulaScript::Runtime {
 
 		std::vector<instruction> loaded_instructions;
 		std::map<uint32_t, source_loc> ip_src_locs;
-		uint32_t next_function_id;
+		uint32_t next_function_id, top_level_local_offset;
 		
 		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
 		std::vector<uint32_t> available_function_ids;

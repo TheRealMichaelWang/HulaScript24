@@ -115,9 +115,11 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 
 				if (func_decl_stack.size() == 1 && scope_stack.size() == 1) {
 					declared_toplevel_locals.push_back(id_hash);
+					current_section.push_back({ .op = opcode::DECL_TOPLVL_LOCAL, .operand = sym.local_id });
 				}
-					
-				current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
+				else {
+					current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
+				}
 				if (!expects_statement)
 					current_section.push_back({ .op = opcode::LOAD_LOCAL, .operand = sym.local_id });
 				return std::nullopt;
@@ -393,7 +395,7 @@ std::optional<error> compiler::compile_expression(tokenizer& tokenizer, std::vec
 
 	UNWRAP(compile_value(tokenizer, current_section, ip_src_map, false, repl_mode)); //lhs
 
-	while (tokenizer.last_token().type >= token_type::PLUS && tokenizer.last_token().type <= token_type::NIL_COALESING && min_precs[tokenizer.last_token().type - token_type::NIL_COALESING] > min_prec)
+	while (tokenizer.last_token().type >= token_type::PLUS && tokenizer.last_token().type <= token_type::NIL_COALESING && min_precs[tokenizer.last_token().type - token_type::PLUS] > min_prec)
 	{
 		token_type op_type = tokenizer.last_token().type;
 		SCAN;
@@ -838,6 +840,8 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 	std::vector<instruction> repl_section;
 	max_instruction = (uint32_t)target_instance.loaded_instructions.size();
+	func_decl_stack.back().max_locals = target_instance.top_level_local_offset;
+	max_globals = target_instance.global_offset;
 	
 	std::map<uint32_t, source_loc> ip_src_map;
 	while (!repl_stop_parsing && !tokenizer.match_last(token_type::END_OF_SOURCE))
