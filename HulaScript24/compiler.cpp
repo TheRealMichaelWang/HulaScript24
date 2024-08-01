@@ -387,17 +387,27 @@ std::optional<error> compiler::compile_expression(tokenizer& tokenizer, std::vec
 		3, //not eq
 
 		1, //and
-		1 //or
+		1, //or
+		3, //nil coaleasing operator
 	};
 
 	UNWRAP(compile_value(tokenizer, current_section, ip_src_map, false, repl_mode)); //lhs
 
-	while (tokenizer.last_token().type >= token_type::PLUS && tokenizer.last_token().type <= token_type::AND && min_precs[tokenizer.last_token().type - token_type::PLUS] > min_prec)
+	while (tokenizer.last_token().type >= token_type::PLUS && tokenizer.last_token().type <= token_type::NIL_COALESING && min_precs[tokenizer.last_token().type - token_type::NIL_COALESING] > min_prec)
 	{
 		token_type op_type = tokenizer.last_token().type;
 		SCAN;
-		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[tokenizer.last_token().type - token_type::PLUS], false));
-		current_section.push_back({ .op = (opcode)((op_type - token_type::PLUS) + opcode::ADD) });
+
+		if (op_type == token_type::NIL_COALESING) {
+			uint32_t jump_addr = (uint32_t)current_section.size();
+			current_section.push_back({ .op = opcode::IFNT_NIL_JUMP_AHEAD });
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[tokenizer.last_token().type - token_type::PLUS], false));
+			current_section[jump_addr].operand = (uint32_t)(current_section.size() - jump_addr);
+		}
+		else {
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[tokenizer.last_token().type - token_type::PLUS], false));
+			current_section.push_back({ .op = (opcode)((op_type - token_type::PLUS) + opcode::ADD) });
+		}
 	}
 
 	return std::nullopt;

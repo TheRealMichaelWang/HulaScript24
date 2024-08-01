@@ -248,16 +248,22 @@ std::variant<token, error> tokenizer::scan_token() {
 			}
 			return last_tok = token(token_type::NOT);
 		case '&':
-			if (last_char != '&')
+			if (last_char != '&') {
 				return error(etype::UNEXPECTED_CHAR, "Expected two ampersands(&&), but got something else.", token_begin);
+			}
 			scan_char();
 			return last_tok = token(token_type::AND);
 		case '|':
-			if (last_char != '|')
+			if (last_char != '|') {
 				return error(etype::UNEXPECTED_CHAR, "Expected two bars(||), but got something else.", token_begin);
+			}
 			scan_char();
 			return last_tok = token(token_type::OR);
 		case '?':
+			if (last_char == '?') {
+				scan_char();
+				return last_tok = token(token_type::NIL_COALESING);
+			}
 			return last_tok = token(token_type::QUESTION);
 		case ':':
 			return last_tok = token(token_type::COLON);
@@ -330,6 +336,7 @@ error tokenizer::make_unexpected_tok_err(std::optional<token_type> expected) {
 
 		"AND",
 		"OR",
+		"NIL COALEASING OPERATOR",
 
 		"NOT",
 		"SET",

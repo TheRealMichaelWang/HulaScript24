@@ -62,6 +62,7 @@ namespace HulaScript::Compilation {
 
 		AND,
 		OR,
+		NIL_COALESING,
 
 		NOT,
 		SET,
