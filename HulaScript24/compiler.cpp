@@ -113,7 +113,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				active_variables.insert({ id_hash, sym });
 				func_decl_stack.back().max_locals++;
 
-				if (func_decl_stack.size() == 1) {
+				if (func_decl_stack.size() == 1 && scope_stack.size() == 1) {
 					declared_toplevel_locals.push_back(id_hash);
 				}
 					
@@ -187,7 +187,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			ip_src_map.insert({ (uint32_t)current_section.size(), loc });
 			current_section.push_back({ .op = opcode::ALLOCATE_DYN });
 		}
-		MATCH_AND_SCAN(token_type::OPEN_BRACKET);
+		MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
 		break;
 	case token_type::OPEN_BRACKET: {
 		SCAN;
@@ -423,7 +423,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 	{
 	case token_type::WHILE: {
 		SCAN;
-		loop_stack.push_back({ .max_local_count = func_decl_stack.back().max_locals });
+		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals, .continue_local_count = func_decl_stack.back().max_locals });
 		uint32_t loop_begin_ip = (uint32_t)current_section.size();
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 		MATCH_AND_SCAN(token_type::DO);
@@ -432,15 +432,15 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		uint32_t probe_ip = (uint32_t)current_section.size();
 		UNWRAP(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::END_BLOCK; }));
 		MATCH_AND_SCAN(token_type::END_BLOCK);
-		current_section[cond_jump_ip].operand = (uint32_t)(current_section.size() - cond_jump_ip);
-		unwind_loop(loop_begin_ip, (uint32_t)current_section.size(), current_section);
 		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip)});
+		unwind_loop(loop_begin_ip, (uint32_t)current_section.size(), current_section);
+		current_section[cond_jump_ip].operand = (uint32_t)(current_section.size() - cond_jump_ip);
 
 		return std::nullopt;
 	}
 	case token_type::DO: {
 		SCAN;
-		loop_stack.push_back({ .max_local_count = func_decl_stack.back().max_locals });
+		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals, .continue_local_count = func_decl_stack.back().max_locals });
 		uint32_t loop_begin_ip = (uint32_t)current_section.size();
 		UNWRAP_AND_HANDLE(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::WHILE; }), loop_stack.pop_back());
 		MATCH_AND_SCAN_AND_HANDLE(token_type::WHILE, loop_stack.pop_back());
@@ -490,34 +490,36 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		MATCH(token_type::IDENTIFIER);
 		std::string id = tokenizer.last_token().str();
 		uint64_t id_hash = str_hash(id.c_str());
+		validate_symbol_availability(id, " iterator variable ", tokenizer.last_token_loc());
 		SCAN;
 		MATCH_AND_SCAN(token_type::IN);
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 		MATCH_AND_SCAN(token_type::DO);
 
-		loop_stack.push_back({ .max_local_count = func_decl_stack.back().max_locals });
 		scope_stack.push_back({ });
 		uint32_t probe_ip = (uint32_t)current_section.size();
 		current_section.push_back({ .op = opcode::PROBE_LOCALS });
 
 		scope_stack.back().symbol_names.push_back(id_hash);
 		variable_symbol sym = {
-					.name = id,
-					.is_global = false,
-					.local_id = func_decl_stack.back().max_locals,
-					.func_id = (uint32_t)(func_decl_stack.size() - 1)
+			.name = id,
+			.is_global = false,
+			.local_id = func_decl_stack.back().max_locals,
+			.func_id = (uint32_t)(func_decl_stack.size() - 1)
 		};
 		active_variables.insert({ id_hash, sym });
 		func_decl_stack.back().max_locals++;
 		current_section.push_back({ .op = opcode::PUSH_NIL });
 		current_section.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
 
+		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals - 1, .continue_local_count = func_decl_stack.back().max_locals - 1 });
+
 		uint32_t loop_begin_ip = (uint32_t)current_section.size();
 		current_section.push_back({ .op = opcode::DUPLICATE });
 		uint32_t check_jump_ip = (uint32_t)current_section.size();
 		current_section.push_back({ .op = opcode::IF_NIL_JUMP_AHEAD });
 		emit_call_method("elem", current_section);
-		current_section.push_back({ .op = opcode::STORE_LOCAL, .operand = 0 });
+		current_section.push_back({ .op = opcode::STORE_LOCAL, .operand = sym.local_id });
 		current_section.push_back({ .op = opcode::DISCARD_TOP });
 
 		while (!tokenizer.match_last(token_type::END_BLOCK) && !tokenizer.match_last(token_type::END_OF_SOURCE)) {
@@ -526,10 +528,12 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		emit_call_method("next", current_section);
 		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip) });
 		current_section[check_jump_ip].operand = (uint32_t)(current_section.size() - check_jump_ip);
-
+		unwind_loop(loop_begin_ip, current_section.size(), current_section);
+		current_section.push_back({ .op = opcode::DISCARD_TOP });
+		unwind_locals(current_section, probe_ip, true);
 		MATCH_AND_SCAN(token_type::END_BLOCK);
 
-		break;
+		return std::nullopt;
 	}
 	case token_type::RETURN: {
 		if (func_decl_stack.size() == 0) {
@@ -542,24 +546,26 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		return std::nullopt;
 	}
 	case token_type::LOOP_BREAK: {
+		SCAN;
 		if (loop_stack.size() == 0) {
 			return error(etype::UNEXPECTED_STATEMENT, "Unexpected break statement outside of loop.", begin_loc);
 		}
 
-		if (func_decl_stack.back().max_locals > loop_stack.back().max_local_count) {
-			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (loop_stack.back().max_local_count - func_decl_stack.back().max_locals) });
+		if (func_decl_stack.back().max_locals > loop_stack.back().break_local_count) {
+			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (func_decl_stack.back().max_locals - loop_stack.back().break_local_count) });
 		}
 		loop_stack.back().break_requests.push_back((uint32_t)current_section.size());
 		current_section.push_back({ .op = opcode::INVALID });
 		return std::nullopt;
 	}
 	case token_type::LOOP_CONTINUE: {
+		SCAN;
 		if (loop_stack.size() == 0) {
 			return error(etype::UNEXPECTED_STATEMENT, "Unexpected continue statement outside of loop.", begin_loc);
 		}
 
-		if (func_decl_stack.back().max_locals > loop_stack.back().max_local_count) {
-			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (loop_stack.back().max_local_count - func_decl_stack.back().max_locals) });
+		if (func_decl_stack.back().max_locals > loop_stack.back().continue_local_count) {
+			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (func_decl_stack.back().max_locals - loop_stack.back().continue_local_count) });
 		}
 		loop_stack.back().continue_requests.push_back((uint32_t)current_section.size());
 		current_section.push_back({ .op = opcode::INVALID });
@@ -754,7 +760,7 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 	{
 		source_loc func_begin = tokenizer.last_token_loc();
 		SCAN;
-		MATCH_AND_SCAN(token_type::IDENTIFIER);
+		MATCH(token_type::IDENTIFIER);
 		std::string name = tokenizer.last_token().str();
 		SCAN;
 
@@ -766,10 +772,11 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 	uint32_t func_id = target_instance.emit_function_start(func_instructions);
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
 	
-	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = (uint32_t)declaration.properties.size() });
+	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = (uint32_t)(declaration.properties.size() + declaration.methods.size()) });
+	func_instructions.push_back({ .op = opcode::PUSH_SCRATCHPAD });
 	for (uint64_t id : default_value_properties) {
 		uint32_t prop_hash_id = target_instance.add_constant_strhash(id);
-		func_instructions.push_back({ .op = opcode::DUPLICATE });
+		func_instructions.push_back({ .op = opcode::PEEK_SCRATCHPAD });
 		func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_hash_id});
 		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
 		func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = prop_hash_id });
@@ -777,6 +784,16 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 		func_instructions.push_back({ .op = opcode::STORE_TABLE_ELEM });
 		func_instructions.push_back({ .op = opcode::DISCARD_TOP });
 	}
+	for (auto func : declaration.methods) {
+		func_instructions.push_back({ .op = opcode::PEEK_SCRATCHPAD });
+		func_instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(func.first) });
+		func_instructions.push_back({ .op = opcode::PEEK_SCRATCHPAD });
+		func_instructions.push_back({ .op = opcode::MAKE_CLOSURE, .operand = func.second });
+		func_instructions.push_back({ .op = opcode::STORE_TABLE_ELEM });
+		func_instructions.push_back({ .op = opcode::DISCARD_TOP });
+	}
+
+	func_instructions.push_back({ .op = opcode::POP_SCRATCHPAD });
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 1 });
 
 	uint32_t param_length;
@@ -943,12 +960,13 @@ void compiler::unwind_locals(std::vector<instruction>& instructions, uint32_t pr
 	for (uint64_t symbol : scope_stack.back().symbol_names) {
 		active_variables.erase(symbol);
 	}
+	func_decl_stack.back().max_locals -= scope_stack.back().symbol_names.size();
 	scope_stack.pop_back();
 }
 
 void compiler::unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vector<instruction>& instructions) {
 	for (uint32_t ip : loop_stack.back().break_requests) {
-		assert(ip > finish_ip);
+		//assert(ip > finish_ip);
 		instructions[ip] = {
 			.op = opcode::JUMP_AHEAD,
 			.operand = finish_ip - ip
@@ -963,7 +981,7 @@ void compiler::unwind_loop(uint32_t cond_check_ip, uint32_t finish_ip, std::vect
 			};
 		}
 		else {
-			assert(ip != finish_ip);
+			//assert(ip != finish_ip);
 			instructions[ip] = {
 				.op = opcode::JUMP_BACK,
 				.operand = ip - finish_ip
@@ -995,7 +1013,7 @@ void compiler::emit_call_method(std::string method_name, std::vector<instruction
 	uint64_t method_id_hash = str_hash(method_name.c_str());
 	instructions.push_back({ .op = opcode::LOAD_CONSTANT, .operand = target_instance.add_constant_strhash(method_id_hash) });
 	instructions.push_back({ .op = opcode::LOAD_TABLE_ELEM });
-	instructions.push_back({ .op = opcode::CALL });
+	instructions.push_back({ .op = opcode::CALL, .operand = 0 });
 }
 
 std::optional<error> compiler::validate_symbol_availability(std::string id, std::string symbol_type, source_loc loc) {

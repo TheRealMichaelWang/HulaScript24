@@ -191,6 +191,9 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.push_back(scratchpad_stack.back());
 			scratchpad_stack.pop_back();
 			goto next_ins;
+		case opcode::PEEK_SCRATCHPAD:
+			evaluation_stack.push_back(scratchpad_stack.back());
+			goto next_ins;
 		case opcode::PUSH_SCRATCHPAD:
 			scratchpad_stack.push_back(evaluation_stack.back());
 			evaluation_stack.pop_back();

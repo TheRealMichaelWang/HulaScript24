@@ -185,7 +185,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			{
 				auto closure_info = val.closure();
 				functions_to_mark.push(closure_info.first);
-				tables_to_mark.push(closure_info.second);
+				if (!marked_tables.contains(closure_info.second)) {
+					tables_to_mark.push(closure_info.second);
+				}
 				break;
 			}
 			}
@@ -256,14 +258,14 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		instance::table_entry& entry = table_entries.unsafe_get(id);
 
 		if (entry.block.table_start == new_table_offset) {
-			new_table_offset += entry.used_elems;
+			new_table_offset += entry.block.allocated_capacity;
 			continue;
 		}
 
 		std::memmove(&table_elems[new_table_offset], &table_elems[entry.block.table_start], entry.used_elems * sizeof(value));
 
 		entry.block.table_start = new_table_offset;
-		new_table_offset += entry.used_elems;
+		new_table_offset += entry.block.allocated_capacity;
 	}
 	table_offset = new_table_offset;
 	free_tables.clear();

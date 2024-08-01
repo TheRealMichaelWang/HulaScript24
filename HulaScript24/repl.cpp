@@ -17,6 +17,11 @@ std::variant<bool, Compilation::error> repl_instance::write_input(std::string in
 		else {
 			switch (type)
 			{
+			case Compilation::token_type::FOR:
+				expected_closing_toks.push_back(Compilation::token_type::END_BLOCK);
+				expected_closing_toks.push_back(Compilation::token_type::DO);
+				expected_closing_toks.push_back(Compilation::token_type::IN);
+				break;
 			case Compilation::token_type::WHILE:
 				expected_closing_toks.push_back(Compilation::token_type::END_BLOCK);
 				expected_closing_toks.push_back(Compilation::token_type::DO);
