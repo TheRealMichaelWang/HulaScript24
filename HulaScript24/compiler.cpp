@@ -643,11 +643,13 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	});
 	unwind_locals(func_instructions, 0, false);
 	{
+		uint32_t expected_params = (uint32_t)param_ids.size();
 		if (class_decl.has_value()) {
 			if (name == "construct") {
 				class_decl.value()->constructor = std::make_pair(func_id, (uint32_t)param_ids.size());
 				func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
 				func_instructions.push_back({ .op = opcode::RETURN });
+				expected_params++;
 			}
 			else {
 				uint64_t name_hash = str_hash(name.c_str());
@@ -655,7 +657,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			}
 		}
 
-		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = (uint32_t)param_ids.size() });
+		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = expected_params });
 		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
 		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
 		
