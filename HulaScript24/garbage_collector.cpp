@@ -285,6 +285,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 
 		//compact instructions of used functions only
 		uint32_t current_ip = 0;
+		std::vector<std::pair<uint32_t, source_loc>> to_reinsert;
 		for (uint32_t id : marked_functions) {
 			instance::loaded_function_entry& entry = function_entries.unsafe_get(id);
 
@@ -293,7 +294,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				continue;
 			}
 
+			uint32_t offset = entry.start_address - current_ip;
 			for (auto it = ip_src_locs.lower_bound(entry.start_address); it != ip_src_locs.lower_bound(entry.start_address + entry.length);) {
+				to_reinsert.push_back(std::make_pair(it->first - offset, it->second));
 				it = ip_src_locs.erase(it);
 			}
 
@@ -306,6 +309,10 @@ void instance::garbage_collect(gc_collection_mode mode) {
 		for (auto it = ip_src_locs.lower_bound(current_ip); it != ip_src_locs.end();) {
 			it = ip_src_locs.erase(it);
 		}
+		for (auto new_ip_src_loc : to_reinsert) {
+			ip_src_locs.insert(new_ip_src_loc);
+		}
+
 		loaded_instructions.erase(loaded_instructions.begin() + current_ip, loaded_instructions.end());
 		loaded_instructions.shrink_to_fit();
 	}

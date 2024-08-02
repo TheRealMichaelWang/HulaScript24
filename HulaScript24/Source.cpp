@@ -4,7 +4,7 @@
 #include "repl.h"
 
 int main() {
-	HulaScript::repl_instance instance(std::nullopt, 4, 2, 8);
+	HulaScript::repl_instance instance(std::nullopt, 256, 16, 256);
 
 	for (;;) {
 		char buf[256];
@@ -20,7 +20,7 @@ int main() {
 			auto run_res = instance.run();
 			if (std::holds_alternative<HulaScript::Runtime::error>(run_res)) {
 				auto runtime_err = std::get<HulaScript::Runtime::error>(run_res);
-				std::cout << instance.error_to_print_str(runtime_err) << std::endl;
+				std::cout << runtime_err.to_print_string() << std::endl;
 			}
 			else if (std::holds_alternative<HulaScript::Compilation::error>(run_res)) {
 				auto compilation_err = std::get<HulaScript::Compilation::error>(run_res);

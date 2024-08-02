@@ -15,7 +15,7 @@ std::variant<value, error> instance::execute() {
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
-														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip, return_stack);\
+														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
 														goto stop_exec;\
 													}\
 
@@ -161,13 +161,13 @@ std::variant<value, error> instance::execute() {
 			goto next_ins;
 		case opcode::PROBE_LOCALS:
 			if (local_offset + extended_local_offset + ins.operand > max_locals) {
-				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", ip, return_stack);
+				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", ip);
 				goto stop_exec;
 			}
 			goto next_ins;
 		case opcode::PROBE_GLOBALS:
 			if (global_offset + ins.operand > max_locals) {
-				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", ip, return_stack);
+				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", ip);
 				goto stop_exec;
 			}
 			goto next_ins;
@@ -266,7 +266,7 @@ std::variant<value, error> instance::execute() {
 				table_entry.key_hash_capacity += 1;
 				auto new_buffer = (std::pair<uint64_t, uint32_t>*)realloc(table_entry.key_hashes, table_entry.key_hash_capacity * sizeof(std::pair<uint64_t, uint32_t>));
 				if (new_buffer == NULL) {
-					current_error = error(etype::MEMORY, "Cannot add new element to table.", ip, return_stack);
+					current_error = make_error(etype::MEMORY, "Cannot add new element to table.", ip);
 					goto stop_exec;
 				}
 				table_entry.key_hashes = new_buffer;
@@ -281,7 +281,7 @@ std::variant<value, error> instance::execute() {
 				scratchpad_stack.push_back(table_val);
 				if (!reallocate_table(table_val.table_id(), 4, 1))
 				{
-					current_error = error(etype::MEMORY, "Failed to add to table.", ip, return_stack);
+					current_error = make_error(etype::MEMORY, "Failed to add to table.", ip);
 					goto stop_exec;
 				}
 				scratchpad_stack.pop_back();
@@ -304,7 +304,7 @@ std::variant<value, error> instance::execute() {
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				current_error = error(etype::MEMORY, ss.str(), ip, return_stack);
+				current_error = make_error(etype::MEMORY, ss.str(), ip);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -315,7 +315,7 @@ std::variant<value, error> instance::execute() {
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				current_error = error(etype::MEMORY, ss.str(), ip, return_stack);
+				current_error = make_error(etype::MEMORY, ss.str(), ip);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -395,7 +395,7 @@ std::variant<value, error> instance::execute() {
 				if (end_addr == loaded_instructions.size()) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					current_error = error(etype::INTERNAL_ERROR, end_addr, return_stack);
+					current_error = make_error(etype::INTERNAL_ERROR, ss.str(), end_addr);
 					goto stop_exec;
 				}
 			} while (instructions[end_addr].op != opcode::FUNCTION_END);
@@ -443,7 +443,7 @@ std::variant<value, error> instance::execute() {
 				}
 
 				ss << " expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip, return_stack);
+				current_error = make_error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
 				goto stop_exec;
 			}
 
@@ -477,12 +477,12 @@ std::variant<value, error> instance::execute() {
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip, return_stack);
+			current_error = make_error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
 			goto stop_exec;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			current_error = error(etype::INTERNAL_ERROR, ss.str(), ip, return_stack);
+			current_error = make_error(etype::INTERNAL_ERROR, ss.str(), ip);
 			goto stop_exec;
 		}
 		}
