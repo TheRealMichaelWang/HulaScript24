@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <cstdint>
 #include <utility>
-#include <string>
 
 namespace HulaScript::Runtime {
 	enum vtype {
@@ -53,7 +52,7 @@ namespace HulaScript::Runtime {
 		//computes a hash specifically to represent value keys
 		const uint64_t compute_key_hash();
 
-		std::string to_print_string();
+		//std::string to_print_string();
 	private:
 		vtype _type;
 

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <optional>
+#include <vector>
 
 namespace HulaScript {
 	class source_loc {
@@ -30,16 +31,16 @@ namespace HulaScript::Runtime {
 
 	class error {
 	public:
-		error(error::etype type, std::string message, std::optional<source_loc> source_loc, uint32_t ip) : type(type), msg(message), location(source_loc), ip(ip) { }
-		error(etype type, std::optional<source_loc> source_loc, uint32_t ip) : type(type), msg(std::nullopt), location(source_loc), ip(ip) { }
-
-		std::string to_print_string();
+		error(error::etype type, std::string message, uint32_t ip, std::vector<uint32_t> stack_trace) : type(type), msg(message), stack_trace(stack_trace), ip(ip) { }
+		error(etype type, uint32_t ip, std::vector<uint32_t> stack_trace) : type(type), msg(std::nullopt), stack_trace(stack_trace), ip(ip) { }
 
 	private:
 		etype type;
 		std::optional<std::string> msg;
-		std::optional<source_loc> location;
 		uint32_t ip;
+		std::vector<uint32_t> stack_trace;
+
+		friend class instance;
 	};
 }
 

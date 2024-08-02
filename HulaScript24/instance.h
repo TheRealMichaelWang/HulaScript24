@@ -25,6 +25,9 @@ namespace HulaScript::Runtime {
 		~instance();
 
 		std::variant<value, error> execute();
+
+		std::string value_to_print_str(value& val);
+		std::string error_to_print_str(error& error);
 	private:
 		enum gc_collection_mode {
 			STANDARD = 0,
@@ -83,7 +86,7 @@ namespace HulaScript::Runtime {
 		std::multimap<uint32_t, gc_block> free_tables;
 		spp::sparse_hash_set<char*> active_strs;
 
-		static error type_error(vtype expected, vtype got, std::optional<source_loc> location, uint32_t ip);
+		static error type_error(vtype expected, vtype got, uint32_t ip, std::vector<uint32_t> stack_trace);
 
 		std::optional<gc_block> allocate_block(uint32_t element_count);
 		std::optional<uint64_t> allocate_table(uint32_t element_count);
@@ -101,6 +104,15 @@ namespace HulaScript::Runtime {
 		
 		uint32_t add_constant_key(value key) {
 			return add_constant(value(vtype::INTERNAL_CONSTHASH, key.compute_hash()));
+		}
+
+		std::optional<source_loc> loc_from_ip(uint32_t ip) {
+			auto it = ip_src_locs.upper_bound(ip);
+			if (it != ip_src_locs.begin()) {
+				it--;
+				return it->second;
+			}
+			return std::nullopt;
 		}
 
 		friend class HulaScript::Compilation::compiler;

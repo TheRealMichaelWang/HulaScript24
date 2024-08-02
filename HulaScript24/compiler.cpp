@@ -670,6 +670,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		}
 
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = expected_params });
+		func_instructions[1].operand = func_decl_stack.back().max_locals;
 		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
 		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
 		

@@ -20,7 +20,7 @@ int main() {
 			auto run_res = instance.run();
 			if (std::holds_alternative<HulaScript::Runtime::error>(run_res)) {
 				auto runtime_err = std::get<HulaScript::Runtime::error>(run_res);
-				std::cout << runtime_err.to_print_string() << std::endl;
+				std::cout << instance.error_to_print_str(runtime_err) << std::endl;
 			}
 			else if (std::holds_alternative<HulaScript::Compilation::error>(run_res)) {
 				auto compilation_err = std::get<HulaScript::Compilation::error>(run_res);
@@ -28,7 +28,7 @@ int main() {
 			}
 			else {
 				HulaScript::Runtime::value result = std::get<HulaScript::Runtime::value>(run_res);
-				std::cout << result.to_print_string() << std::endl;
+				std::cout << instance.value_to_print_str(result) << std::endl;
 			}
 		}
 	}
