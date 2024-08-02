@@ -31,16 +31,14 @@ namespace HulaScript::Runtime {
 
 	class error {
 	public:
-		error(error::etype type, std::string message, uint32_t ip, std::vector<uint32_t> stack_trace) : type(type), msg(message), stack_trace(stack_trace), ip(ip) { }
-		error(etype type, uint32_t ip, std::vector<uint32_t> stack_trace) : type(type), msg(std::nullopt), stack_trace(stack_trace), ip(ip) { }
+		error(error::etype type, std::optional<std::string> message, std::optional<source_loc> location, std::vector<std::pair<std::optional<source_loc>, uint32_t>> stack_trace) : type(type), msg(message), stack_trace(stack_trace), location(location) { }
 
+		std::string to_print_string();
 	private:
 		etype type;
 		std::optional<std::string> msg;
-		uint32_t ip;
-		std::vector<uint32_t> stack_trace;
-
-		friend class instance;
+		std::optional<source_loc> location;
+		std::vector<std::pair<std::optional<source_loc>, uint32_t>> stack_trace;
 	};
 }
 

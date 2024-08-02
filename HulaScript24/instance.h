@@ -27,7 +27,6 @@ namespace HulaScript::Runtime {
 		std::variant<value, error> execute();
 
 		std::string value_to_print_str(value& val);
-		std::string error_to_print_str(error& error);
 	private:
 		enum gc_collection_mode {
 			STANDARD = 0,
@@ -86,7 +85,7 @@ namespace HulaScript::Runtime {
 		std::multimap<uint32_t, gc_block> free_tables;
 		spp::sparse_hash_set<char*> active_strs;
 
-		static error type_error(vtype expected, vtype got, uint32_t ip, std::vector<uint32_t> stack_trace);
+		error type_error(vtype expected, vtype got, uint32_t ip);
 
 		std::optional<gc_block> allocate_block(uint32_t element_count);
 		std::optional<uint64_t> allocate_table(uint32_t element_count);
@@ -113,6 +112,20 @@ namespace HulaScript::Runtime {
 				return it->second;
 			}
 			return std::nullopt;
+		}
+
+		error make_error(etype type, std::optional<std::string> msg, uint32_t ip) {
+			std::vector<std::pair<std::optional<source_loc>, uint32_t>> stack_trace;
+			for (auto it = return_stack.begin(); it != return_stack.end(); ) {
+				uint32_t ip = *it;
+				uint32_t repeats = 0;
+				do {
+					it++;
+					repeats++;
+				} while (it != return_stack.end() && ip == *it);
+				stack_trace.push_back(std::make_pair(loc_from_ip(ip), repeats));
+			}
+			return error(type, msg, loc_from_ip(ip), stack_trace);
 		}
 
 		friend class HulaScript::Compilation::compiler;

@@ -403,11 +403,11 @@ std::optional<error> compiler::compile_expression(tokenizer& tokenizer, std::vec
 		if (op_type == token_type::NIL_COALESING) {
 			uint32_t jump_addr = (uint32_t)current_section.size();
 			current_section.push_back({ .op = opcode::IFNT_NIL_JUMP_AHEAD });
-			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[tokenizer.last_token().type - token_type::PLUS], false));
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[op_type - token_type::PLUS], false));
 			current_section[jump_addr].operand = (uint32_t)(current_section.size() - jump_addr);
 		}
 		else {
-			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[tokenizer.last_token().type - token_type::PLUS], false));
+			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[op_type - token_type::PLUS], false));
 			current_section.push_back({ .op = (opcode)((op_type - token_type::PLUS) + opcode::ADD) });
 		}
 	}

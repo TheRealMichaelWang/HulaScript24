@@ -16,10 +16,6 @@ namespace HulaScript {
 
 		std::variant<Runtime::value, Runtime::error, Compilation::error> run();
 
-		std::string error_to_print_str(Runtime::error& error) {
-			return instance.error_to_print_str(error);
-		}
-
 		std::string value_to_print_str(Runtime::value& value) {
 			return instance.value_to_print_str(value);
 		}
