@@ -7,9 +7,9 @@ std::string source_loc::to_print_string() {
 	std::stringstream ss;
 
 	if (file.has_value()) {
-		ss << file.value() << ':';
+		ss << file.value() << ": ";
 	}
-	ss << row << ':' << column;
+	ss << "row " << row << ", col " << column;
 
 	if (function_name.has_value()) {
 		ss << " in function " << function_name.value();

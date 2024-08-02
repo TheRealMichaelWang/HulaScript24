@@ -4,14 +4,14 @@
 #include "repl.h"
 
 int main() {
-	HulaScript::repl_instance instance("myInstance", 4, 2, 8);
+	HulaScript::repl_instance instance(std::nullopt, 4, 2, 8);
 
-	std::cout << ">>> ";
 	for (;;) {
-		std::string line;
-		std::getline(std::cin, line);
+		char buf[256];
+		//std::getline(std::cin, line);
+		std::cin.getline(buf, 256);
 
-		auto input_res = instance.write_input(line);
+		auto input_res = instance.write_input(std::string(buf));
 		if (std::holds_alternative<HulaScript::Compilation::error>(input_res)) {
 			auto compilation_err = std::get<HulaScript::Compilation::error>(input_res);
 			std::cout << compilation_err.to_print_string() << std::endl;
@@ -30,10 +30,6 @@ int main() {
 				HulaScript::Runtime::value result = std::get<HulaScript::Runtime::value>(run_res);
 				std::cout << result.to_print_string() << std::endl;
 			}
-			std::cout << ">>> ";
-		}
-		else {
-			std::cout << "... ";
 		}
 	}
 
