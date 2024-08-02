@@ -1,3 +1,4 @@
+#include <sstream>
 #include "instructions.h"
 #include "repl.h"
 
@@ -6,7 +7,8 @@ using namespace HulaScript;
 std::variant<bool, Compilation::error> repl_instance::write_input(std::string input) {
 	Compilation::tokenizer tokenizer(input, name);
 	
-	input_builder << input << "\n\0";
+	input_builder.append(input);
+	input_builder.append("\n\0");
 	while (!tokenizer.match_last(Compilation::token_type::END_OF_SOURCE))
 	{
 		Compilation::token_type type = tokenizer.last_token().type;
@@ -60,10 +62,19 @@ std::variant<bool, Compilation::error> repl_instance::write_input(std::string in
 }
 
 std::variant<Runtime::value, Runtime::error, Compilation::error> repl_instance::run() {
-	Compilation::tokenizer tokenizer(input_builder.str(), name);
+	std::stringstream ss;
+	if (name.has_value()) {
+		ss << name.value();
+	}
+	else {
+		ss << "REPL instance";
+	}
+	ss << ", evaluation no. " << eval_no;
 
+	Compilation::tokenizer tokenizer(input_builder, ss.str());
+
+	eval_no++;
 	auto compile_res = compiler.compile(tokenizer, true);
-	input_builder.str(std::string());
 	input_builder.clear();
 	if (compile_res.has_value()) {
 		return compile_res.value();
