@@ -1,7 +1,10 @@
 #include <cstring>
 #include <cassert>
+#include <string>
+#include <sstream>
 #include "hash.h"
 #include "value.h"
+#include "instance.h"
 
 using namespace HulaScript::Runtime;
 
@@ -39,17 +42,44 @@ const uint64_t value::compute_key_hash() {
 	}
 }
 
-std::string value::to_print_string() {
-	switch (_type)
+std::string instance::value_to_print_str(value& val) {
+	switch (val.type())
 	{
-	case HulaScript::Runtime::CLOSURE:
-		return std::to_string(func_id);
-	case HulaScript::Runtime::TABLE:
-		return std::to_string(data.table_id);
+	case HulaScript::Runtime::CLOSURE: {
+		auto closure = val.closure();
+
+		std::stringstream ss;
+		ss << "closure(func_id=" << closure.first << ", capture_table=";
+
+		table_entry& entry = table_entries.unsafe_get(closure.second);
+		ss << '[';
+		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
+			if (i > 0) {
+				ss << ", ";
+			}
+			ss << value_to_print_str(table_elems[entry.block.table_start + i]);
+		}
+		ss << ']';
+		return ss.str();
+	}
+	case HulaScript::Runtime::TABLE: {
+		table_entry& entry = table_entries.unsafe_get(val.table_id());
+
+		std::stringstream ss;
+		ss << '[';
+		for (uint_fast32_t i = 0; i < entry.used_elems; i++) {
+			if (i > 0) {
+				ss << ", ";
+			}
+			ss << value_to_print_str(table_elems[entry.block.table_start + i]);
+		}
+		ss << ']';
+		return ss.str();
+	}
 	case HulaScript::Runtime::STRING:
-		return std::string(data.str);
+		return std::string(val.str());
 	case HulaScript::Runtime::NUMBER:
-		return std::to_string(data.number);
+		return std::to_string(val.number());
 	case HulaScript::Runtime::NIL:
 		return "nil";
 	default:

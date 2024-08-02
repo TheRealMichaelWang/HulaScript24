@@ -12,18 +12,10 @@ std::variant<value, error> instance::execute() {
 	uint_fast32_t ip = start_ip;
 	local_offset = 0;
 
-#define LOAD_SRC_LOC(RESULT, IP) std::optional<source_loc> RESULT = std::nullopt;\
-								{ auto RESULT##_it = ip_src_locs.upper_bound(IP);\
-								if(RESULT##_it != ip_src_locs.begin()) {\
-									RESULT##_it--;\
-									RESULT = RESULT##_it->second;\
-								} }
-
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
-														LOAD_SRC_LOC(src_loc, ip);\
-														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), src_loc, ip);\
+														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip, return_stack);\
 														goto stop_exec;\
 													}\
 
@@ -169,15 +161,13 @@ std::variant<value, error> instance::execute() {
 			goto next_ins;
 		case opcode::PROBE_LOCALS:
 			if (local_offset + extended_local_offset + ins.operand > max_locals) {
-				LOAD_SRC_LOC(src_loc, ip);
-				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", src_loc, ip);
+				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", ip, return_stack);
 				goto stop_exec;
 			}
 			goto next_ins;
 		case opcode::PROBE_GLOBALS:
 			if (global_offset + ins.operand > max_locals) {
-				LOAD_SRC_LOC(src_loc, ip);
-				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", src_loc, ip);
+				current_error = error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", ip, return_stack);
 				goto stop_exec;
 			}
 			goto next_ins;
@@ -276,8 +266,7 @@ std::variant<value, error> instance::execute() {
 				table_entry.key_hash_capacity += 1;
 				auto new_buffer = (std::pair<uint64_t, uint32_t>*)realloc(table_entry.key_hashes, table_entry.key_hash_capacity * sizeof(std::pair<uint64_t, uint32_t>));
 				if (new_buffer == NULL) {
-					LOAD_SRC_LOC(src_loc, ip);
-					current_error = error(etype::MEMORY, "Cannot add new element to table.", src_loc, ip);
+					current_error = error(etype::MEMORY, "Cannot add new element to table.", ip, return_stack);
 					goto stop_exec;
 				}
 				table_entry.key_hashes = new_buffer;
@@ -292,8 +281,7 @@ std::variant<value, error> instance::execute() {
 				scratchpad_stack.push_back(table_val);
 				if (!reallocate_table(table_val.table_id(), 4, 1))
 				{
-					LOAD_SRC_LOC(src_loc, ip);
-					current_error = error(etype::MEMORY, "Failed to add to table.", src_loc, ip);
+					current_error = error(etype::MEMORY, "Failed to add to table.", ip, return_stack);
 					goto stop_exec;
 				}
 				scratchpad_stack.pop_back();
@@ -316,8 +304,7 @@ std::variant<value, error> instance::execute() {
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				LOAD_SRC_LOC(src_loc, ip);
-				current_error = error(etype::MEMORY, ss.str(), src_loc, ip);
+				current_error = error(etype::MEMORY, ss.str(), ip, return_stack);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -328,8 +315,7 @@ std::variant<value, error> instance::execute() {
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				LOAD_SRC_LOC(src_loc, ip);
-				current_error = error(etype::MEMORY, ss.str(), src_loc, ip);
+				current_error = error(etype::MEMORY, ss.str(), ip, return_stack);
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -409,8 +395,7 @@ std::variant<value, error> instance::execute() {
 				if (end_addr == loaded_instructions.size()) {
 					std::stringstream ss;
 					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					LOAD_SRC_LOC(src_loc, ip);
-					current_error = error(etype::INTERNAL_ERROR, src_loc, end_addr);
+					current_error = error(etype::INTERNAL_ERROR, end_addr, return_stack);
 					goto stop_exec;
 				}
 			} while (instructions[end_addr].op != opcode::FUNCTION_END);
@@ -452,14 +437,13 @@ std::variant<value, error> instance::execute() {
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
 				std::stringstream ss;
 				ss << "Function";
-				LOAD_SRC_LOC(func_loc, fn_entry.start_address);
+				auto func_loc = loc_from_ip(fn_entry.start_address);
 				if (func_loc.has_value()) {
 					ss << ", at " << func_loc.value().to_print_string() << ',';
 				}
 
 				ss << " expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				LOAD_SRC_LOC(src_loc, ip);
-				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), src_loc, ip);
+				current_error = error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip, return_stack);
 				goto stop_exec;
 			}
 
@@ -493,12 +477,12 @@ std::variant<value, error> instance::execute() {
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", std::nullopt, ip);
+			current_error = error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip, return_stack);
 			goto stop_exec;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			current_error = error(etype::INTERNAL_ERROR, ss.str(), std::nullopt, ip);
+			current_error = error(etype::INTERNAL_ERROR, ss.str(), ip, return_stack);
 			goto stop_exec;
 		}
 		}
