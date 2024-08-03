@@ -359,13 +359,13 @@ static inline uint32_t s_spp_popcount_default(uint64_t x) SPP_NOEXCEPT
     {
         size_t x = (v & -v) - 1;
         // sadly sizeof() required to build on macos 
-        return sizeof(size_t) == 8 ? s_spp_popcount_default((uint64_t)x) : s_spp_popcount_default((uint32_t)x);
+        return sizeof(size_t) == 8 ? s_spp_popcount_default((uint64_t)x) : s_spp_popcount_default(static_cast<uint32_t>x);
     }
 
     static inline uint32_t s_popcount(size_t v) SPP_NOEXCEPT
     {
         // sadly sizeof() required to build on macos 
-        return sizeof(size_t) == 8 ? s_spp_popcount_default((uint64_t)v) : s_spp_popcount_default((uint32_t)v);
+        return sizeof(size_t) == 8 ? s_spp_popcount_default((uint64_t)v) : s_spp_popcount_default(static_cast<uint32_t>v);
     }
 #else
     static inline uint32_t count_trailing_zeroes(size_t v) SPP_NOEXCEPT
