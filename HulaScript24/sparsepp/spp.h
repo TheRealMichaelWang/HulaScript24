@@ -992,7 +992,7 @@ static inline uint32_t spp_popcount(uint32_t i)
 static inline uint32_t spp_popcount(uint64_t i)
 {
     static const bool s_ok = spp_popcount_check();
-    return s_ok ? (uint32_t)SPP_POPCNT64(i) : s_spp_popcount_default(i);
+    return s_ok ? static_cast<uint32_t>SPP_POPCNT64(i) : s_spp_popcount_default(i);
 }
 
 #else
@@ -1173,7 +1173,7 @@ private:
 
     static size_type _pos_to_offset(group_bm_type bm, size_type pos)
     {
-        //return (size_type)((uint32_t)~((int32_t(-1) + pos) >> 31) & spp_popcount(bm << (SPP_GROUP_SIZE - pos)));
+        //return (size_type)(static_cast<uint32_t>~((int32_t(-1) + pos) >> 31) & spp_popcount(bm << (SPP_GROUP_SIZE - pos)));
         //return (size_type)(pos ? spp_popcount(bm << (SPP_GROUP_SIZE - pos)) : 0);
         return static_cast<size_type>(spp_popcount(bm & ((static_cast<group_bm_type>(1) << pos) - 1)));
     }
@@ -1404,7 +1404,7 @@ private:
         uint32_t  num_items = _num_items();
         uint32_t  num_alloc = _sizing(num_items);
 
-        //assert(num_alloc == (uint32_t)_num_allocated);
+        //assert(num_alloc == static_cast<uint32_t>_num_allocated);
         if (num_items < num_alloc)
         {
             // create new object at end and rotate it to position
@@ -1756,11 +1756,11 @@ private:
 
 
 #ifdef SPP_STORE_NUM_ITEMS
-    uint32_t _num_items() const           { return (uint32_t)_num_buckets; }
+    uint32_t _num_items() const           { return static_cast<uint32_t>(_num_buckets); }
     void     _set_num_items(uint32_t val) { _num_buckets = static_cast<size_type>(val); }
     void     _incr_num_items()            { ++_num_buckets; }
     void     _decr_num_items()            { --_num_buckets; }
-    uint32_t _num_alloc() const           { return (uint32_t)_num_allocated; }
+    uint32_t _num_alloc() const           { return static_cast<uint32_t>(_num_allocated); }
     void     _set_num_alloc(uint32_t val) { _num_allocated = static_cast<size_type>(val); }
 #else
     uint32_t _num_items() const           { return spp_popcount(_bitmap); }

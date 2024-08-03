@@ -38,7 +38,7 @@ uint32_t instance::add_constant(value constant) {
 	if (it == added_constant_hashes.end()) {
 		uint32_t id;
 		if (available_constant_ids.empty())
-			id = (uint32_t)constants.size();
+			id = static_cast<uint32_t>(constants.size());
 		else {
 			id = available_constant_ids.back();
 			available_constant_ids.pop_back();

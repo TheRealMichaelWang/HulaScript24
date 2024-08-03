@@ -46,7 +46,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 	token token = tokenizer.last_token();
 	source_loc loc = tokenizer.last_token_loc();
 
-	ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+	ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 	bool value_is_self = false;
 	switch (token.type)
 	{
@@ -81,7 +81,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 						return error(etype::CANNOT_CAPTURE_VAR, "Cannot capture variable from within a class method.", loc);
 					}
 
-					for (uint32_t i = (uint32_t)(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {
+					for (uint32_t i = static_cast<uint32_t>(func_decl_stack.size() - 1); i > local_it->second.func_id; i--) {
 						auto capture_it = func_decl_stack[i].captured_vars.find(id_hash);
 						if (capture_it == func_decl_stack[i].captured_vars.end()) {
 							func_decl_stack[i].captured_vars.insert(id_hash);
@@ -108,7 +108,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 					.name = id,
 					.is_global = false,
 					.local_id = func_decl_stack.back().max_locals,
-					.func_id = (uint32_t)(func_decl_stack.size() - 1)
+					.func_id = static_cast<uint32_t>(func_decl_stack.size() - 1)
 				};
 				active_variables.insert({ id_hash, sym });
 				func_decl_stack.back().max_locals++;
@@ -180,20 +180,20 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		SCAN;
 		MATCH_AND_SCAN(token_type::OPEN_BRACKET);
 		if (tokenizer.match_last(token_type::NUMBER)) {
-			uint32_t length = (uint32_t)floor(tokenizer.last_token().number());
+			uint32_t length = static_cast<uint32_t>(floor(tokenizer.last_token().number()));
 			current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = length });
 			SCAN;
 		}
 		else {
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-			ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+			ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 			current_section.push_back({ .op = opcode::ALLOCATE_DYN });
 		}
 		MATCH_AND_SCAN(token_type::CLOSE_BRACKET);
 		break;
 	case token_type::OPEN_BRACKET: {
 		SCAN;
-		uint32_t allocate_ins = (uint32_t)current_section.size();
+		uint32_t allocate_ins = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
 		uint32_t length = 0;
 		while (!tokenizer.match_last(token_type::CLOSE_BRACKET) && !tokenizer.match_last(token_type::END_OF_SOURCE))
@@ -215,7 +215,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 	}
 	case token_type::OPEN_BRACE: {
 		SCAN;
-		uint32_t allocate_ins = (uint32_t)current_section.size();
+		uint32_t allocate_ins = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
 		uint32_t length = 0;
 		while (!tokenizer.match_last(token_type::CLOSE_BRACE) && !tokenizer.match_last(token_type::END_OF_SOURCE))
@@ -257,16 +257,16 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 
 		MATCH_AND_SCAN(token_type::THEN);
-		uint32_t cond_check_ip = (uint32_t)current_section.size();
+		uint32_t cond_check_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-		uint32_t jump_final_ip = (uint32_t)current_section.size();
+		uint32_t jump_final_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::JUMP_AHEAD });
 
 		MATCH_AND_SCAN(token_type::ELSE);
-		current_section[cond_check_ip].operand = (uint32_t)(current_section.size() - cond_check_ip);
+		current_section[cond_check_ip].operand = static_cast<uint32_t>(current_section.size() - cond_check_ip);
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-		current_section[jump_final_ip].operand = (uint32_t)(current_section.size() - jump_final_ip);
+		current_section[jump_final_ip].operand = static_cast<uint32_t>(current_section.size() - jump_final_ip);
 		
 		if (expects_statement) {
 			return error(etype::UNEXPECTED_VALUE, "Expected statement, but got if-else value instead.", loc);
@@ -302,7 +302,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				loc = tokenizer.last_token_loc();
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+				ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
@@ -323,13 +323,13 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 				loc = tokenizer.last_token_loc();
 				SCAN;
 				UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
-				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+				ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 				current_section.push_back({ .op = opcode::STORE_TABLE_ELEM });
 				current_section.push_back({ .op = opcode::DISCARD_TOP });
 				return std::nullopt;
 			}
 			else {
-				ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+				ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 				current_section.push_back({ .op = opcode::LOAD_TABLE_ELEM });
 				is_statement = false;
 				value_is_self = false;
@@ -351,7 +351,7 @@ std::optional<error> compiler::compile_value(tokenizer& tokenizer, std::vector<i
 			}
 			MATCH_AND_SCAN(token_type::CLOSE_PAREN);
 
-			ip_src_map.insert({ (uint32_t)current_section.size(), loc });
+			ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), loc });
 			current_section.push_back({ .op = opcode::POP_SCRATCHPAD });
 			current_section.push_back({ .op = opcode::CALL, .operand = length });
 			is_statement = true;
@@ -401,10 +401,10 @@ std::optional<error> compiler::compile_expression(tokenizer& tokenizer, std::vec
 		SCAN;
 
 		if (op_type == token_type::NIL_COALESING) {
-			uint32_t jump_addr = (uint32_t)current_section.size();
+			uint32_t jump_addr = static_cast<uint32_t>(current_section.size());
 			current_section.push_back({ .op = opcode::IFNT_NIL_JUMP_AHEAD });
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[op_type - token_type::PLUS], false));
-			current_section[jump_addr].operand = (uint32_t)(current_section.size() - jump_addr);
+			current_section[jump_addr].operand = static_cast<uint32_t>(current_section.size() - jump_addr);
 		}
 		else {
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, min_precs[op_type - token_type::PLUS], false));
@@ -419,36 +419,36 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 	token& token = tokenizer.last_token();
 	source_loc& begin_loc = tokenizer.last_token_loc();
 
-	ip_src_map.insert({ (uint32_t)current_section.size(), begin_loc });
+	ip_src_map.insert({ static_cast<uint32_t>(current_section.size()), begin_loc });
 	switch (token.type)
 	{
 	case token_type::WHILE: {
 		SCAN;
 		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals, .continue_local_count = func_decl_stack.back().max_locals });
-		uint32_t loop_begin_ip = (uint32_t)current_section.size();
+		uint32_t loop_begin_ip = static_cast<uint32_t>(current_section.size());
 		UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false));
 		MATCH_AND_SCAN(token_type::DO);
-		uint32_t cond_jump_ip = (uint32_t)current_section.size();
+		uint32_t cond_jump_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
-		uint32_t probe_ip = (uint32_t)current_section.size();
+		uint32_t probe_ip = static_cast<uint32_t>(current_section.size());
 		UNWRAP(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::END_BLOCK; }));
 		MATCH_AND_SCAN(token_type::END_BLOCK);
-		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip)});
-		unwind_loop(loop_begin_ip, (uint32_t)current_section.size(), current_section);
-		current_section[cond_jump_ip].operand = (uint32_t)(current_section.size() - cond_jump_ip);
+		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = static_cast<uint32_t>(current_section.size() - loop_begin_ip)});
+		unwind_loop(loop_begin_ip, static_cast<uint32_t>(current_section.size()), current_section);
+		current_section[cond_jump_ip].operand = static_cast<uint32_t>(current_section.size() - cond_jump_ip);
 
 		return std::nullopt;
 	}
 	case token_type::DO: {
 		SCAN;
 		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals, .continue_local_count = func_decl_stack.back().max_locals });
-		uint32_t loop_begin_ip = (uint32_t)current_section.size();
+		uint32_t loop_begin_ip = static_cast<uint32_t>(current_section.size());
 		UNWRAP_AND_HANDLE(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::WHILE; }), loop_stack.pop_back());
 		MATCH_AND_SCAN_AND_HANDLE(token_type::WHILE, loop_stack.pop_back());
-		uint32_t continue_ip = (uint32_t)current_section.size();
+		uint32_t continue_ip = static_cast<uint32_t>(current_section.size());
 		UNWRAP_AND_HANDLE(compile_expression(tokenizer, current_section, ip_src_map, 0, false), loop_stack.pop_back());
-		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip) });
-		unwind_loop(continue_ip, (uint32_t)current_section.size(), current_section);
+		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = static_cast<uint32_t>(current_section.size() - loop_begin_ip) });
+		unwind_loop(continue_ip, static_cast<uint32_t>(current_section.size()), current_section);
 		return std::nullopt;
 	}
 	case token_type::IF: {
@@ -458,20 +458,20 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		do {
 			if (jump_end_ips.size() > 0) {
 				SCAN;
-				current_section[last_cond_check_ip].operand = (uint32_t)(current_section.size() - last_cond_check_ip);
+				current_section[last_cond_check_ip].operand = static_cast<uint32_t>(current_section.size() - last_cond_check_ip);
 			}
 
 			UNWRAP(compile_expression(tokenizer, current_section, ip_src_map, 0, false)); //compile condition
 			MATCH_AND_SCAN(token_type::THEN);
-			last_cond_check_ip = (uint32_t)current_section.size();
+			last_cond_check_ip = static_cast<uint32_t>(current_section.size());
 			current_section.push_back({ .op = opcode::COND_JUMP_AHEAD });
 
 			UNWRAP(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::END_BLOCK || t == token_type::ELIF || t == token_type::ELSE; }));
-			jump_end_ips.push_back((uint32_t)current_section.size());
+			jump_end_ips.push_back(static_cast<uint32_t>(current_section.size()));
 			current_section.push_back({ .op = opcode::JUMP_AHEAD });
 		} while (tokenizer.match_last(token_type::ELIF));
 
-		current_section[last_cond_check_ip].operand = (uint32_t)(current_section.size() - last_cond_check_ip);
+		current_section[last_cond_check_ip].operand = static_cast<uint32_t>(current_section.size() - last_cond_check_ip);
 		if (tokenizer.match_last(token_type::ELSE)) {
 			SCAN;
 			UNWRAP(compile_block(tokenizer, current_section, ip_src_map, [](token_type t) -> bool { return t == token_type::END_BLOCK; }));
@@ -482,7 +482,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		}
 		
 		for (uint32_t ip : jump_end_ips) {
-			current_section[ip].operand = (uint32_t)(current_section.size() - ip);
+			current_section[ip].operand = static_cast<uint32_t>(current_section.size() - ip);
 		}
 		return std::nullopt; 
 	}
@@ -498,7 +498,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		MATCH_AND_SCAN(token_type::DO);
 
 		scope_stack.push_back({ });
-		uint32_t probe_ip = (uint32_t)current_section.size();
+		uint32_t probe_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::PROBE_LOCALS });
 
 		scope_stack.back().symbol_names.push_back(id_hash);
@@ -506,7 +506,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 			.name = id,
 			.is_global = false,
 			.local_id = func_decl_stack.back().max_locals,
-			.func_id = (uint32_t)(func_decl_stack.size() - 1)
+			.func_id = static_cast<uint32_t>(func_decl_stack.size() - 1)
 		};
 		active_variables.insert({ id_hash, sym });
 		func_decl_stack.back().max_locals++;
@@ -515,9 +515,9 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 
 		loop_stack.push_back({ .break_local_count = func_decl_stack.back().max_locals - 1, .continue_local_count = func_decl_stack.back().max_locals - 1 });
 
-		uint32_t loop_begin_ip = (uint32_t)current_section.size();
+		uint32_t loop_begin_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::DUPLICATE });
-		uint32_t check_jump_ip = (uint32_t)current_section.size();
+		uint32_t check_jump_ip = static_cast<uint32_t>(current_section.size());
 		current_section.push_back({ .op = opcode::IF_NIL_JUMP_AHEAD });
 		emit_call_method("elem", current_section);
 		current_section.push_back({ .op = opcode::STORE_LOCAL, .operand = sym.local_id });
@@ -527,8 +527,8 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 			UNWRAP_AND_HANDLE(compile_statement(tokenizer, current_section, ip_src_map, false), unwind_locals(current_section, probe_ip, false));
 		}
 		emit_call_method("next", current_section);
-		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = (uint32_t)(current_section.size() - loop_begin_ip) });
-		current_section[check_jump_ip].operand = (uint32_t)(current_section.size() - check_jump_ip);
+		current_section.push_back({ .op = opcode::JUMP_BACK, .operand = static_cast<uint32_t>(current_section.size() - loop_begin_ip) });
+		current_section[check_jump_ip].operand = static_cast<uint32_t>(current_section.size() - check_jump_ip);
 		unwind_loop(loop_begin_ip, current_section.size(), current_section);
 		current_section.push_back({ .op = opcode::DISCARD_TOP });
 		unwind_locals(current_section, probe_ip, true);
@@ -555,7 +555,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		if (func_decl_stack.back().max_locals > loop_stack.back().break_local_count) {
 			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (func_decl_stack.back().max_locals - loop_stack.back().break_local_count) });
 		}
-		loop_stack.back().break_requests.push_back((uint32_t)current_section.size());
+		loop_stack.back().break_requests.push_back(static_cast<uint32_t>(current_section.size()));
 		current_section.push_back({ .op = opcode::INVALID });
 		return std::nullopt;
 	}
@@ -568,7 +568,7 @@ std::optional<error> compiler::compile_statement(tokenizer& tokenizer, std::vect
 		if (func_decl_stack.back().max_locals > loop_stack.back().continue_local_count) {
 			current_section.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (func_decl_stack.back().max_locals - loop_stack.back().continue_local_count) });
 		}
-		loop_stack.back().continue_requests.push_back((uint32_t)current_section.size());
+		loop_stack.back().continue_requests.push_back(static_cast<uint32_t>(current_section.size()));
 		current_section.push_back({ .op = opcode::INVALID });
 		return std::nullopt;
 	}
@@ -611,7 +611,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 
 	func_decl_stack.push_back({
 		.name = name,
-		.max_locals = (uint32_t)(1 + param_ids.size()),
+		.max_locals = static_cast<uint32_t>(1 + param_ids.size()),
 		.captured_vars = spp::sparse_hash_set<uint64_t>(4),
 		.class_decl = class_decl
 	});
@@ -631,7 +631,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 			.name = param_ids[i],
 			.is_global = false,
 			.local_id = param_id,
-			.func_id = (uint32_t)(func_decl_stack.size() - 1)
+			.func_id = static_cast<uint32_t>(func_decl_stack.size() - 1)
 		};
 		active_variables.insert({ str_hash(param_ids[i].c_str()), sym });
 		func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = sym.local_id });
@@ -655,10 +655,10 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 	});
 	unwind_locals(func_instructions, 0, false);
 	{
-		uint32_t expected_params = (uint32_t)param_ids.size();
+		uint32_t expected_params = static_cast<uint32_t>(param_ids.size());
 		if (class_decl.has_value()) {
 			if (name == "construct") {
-				class_decl.value()->constructor = std::make_pair(func_id, (uint32_t)param_ids.size());
+				class_decl.value()->constructor = std::make_pair(func_id, static_cast<uint32_t>(param_ids.size()));
 				func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 0 });
 				func_instructions.push_back({ .op = opcode::RETURN });
 				expected_params++;
@@ -671,7 +671,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 
 		func_instructions.push_back({ .op = opcode::FUNCTION_END, .operand = expected_params });
 		func_instructions[1].operand = func_decl_stack.back().max_locals;
-		uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
+		uint32_t old_size = static_cast<uint32_t>(target_instance.loaded_instructions.size());
 		target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), func_instructions.begin(), func_instructions.end());
 		
 		if (report_src_locs) {
@@ -681,7 +681,7 @@ std::optional<error> compiler::compile_function(std::string name, tokenizer& tok
 		}
 
 		if (!class_decl.has_value()) { //handle captured variables
-			uint32_t capture_size = (uint32_t)func_decl_stack.back().captured_vars.size();
+			uint32_t capture_size = static_cast<uint32_t>(func_decl_stack.back().captured_vars.size());
 			current_section.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = capture_size });
 
 			for (auto& captured_var : func_decl_stack.back().captured_vars) {
@@ -735,7 +735,7 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 	spp::sparse_hash_set<uint64_t> default_value_properties;
 	std::vector<uint64_t> ordered_properties;
 	
-	uint32_t alloc_table_ip = (uint32_t)current_section.size();
+	uint32_t alloc_table_ip = static_cast<uint32_t>(current_section.size());
 	current_section.push_back({ .op = opcode::ALLOCATE_FIXED });
 	while (tokenizer.match_last(token_type::IDENTIFIER))
 	{
@@ -761,7 +761,7 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 			default_value_properties.insert(id);
 		}
 	}
-	current_section[alloc_table_ip].operand = (uint32_t)default_value_properties.size();
+	current_section[alloc_table_ip].operand = static_cast<uint32_t>(default_value_properties.size());
 
 	while (tokenizer.match_last(token_type::FUNCTION))
 	{
@@ -777,11 +777,11 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 
 	std::vector<instruction> func_instructions;
 	uint32_t func_id = target_instance.emit_function_start(func_instructions);
-	uint32_t probe_ip = (uint32_t)func_instructions.size();
+	uint32_t probe_ip = static_cast<uint32_t>(func_instructions.size());
 	func_instructions.push_back({ .op = opcode::PROBE_LOCALS });
 	func_instructions.push_back({ .op = opcode::DECL_LOCAL, .operand = 0 });
 	
-	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = (uint32_t)(declaration.properties.size() + declaration.methods.size()) });
+	func_instructions.push_back({ .op = opcode::ALLOCATE_FIXED, .operand = static_cast<uint32_t>(declaration.properties.size() + declaration.methods.size()) });
 	func_instructions.push_back({ .op = opcode::PUSH_SCRATCHPAD });
 	for (uint64_t id : default_value_properties) {
 		uint32_t prop_hash_id = target_instance.add_constant_strhash(id);
@@ -825,7 +825,7 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 				func_instructions.push_back({ .op = opcode::DISCARD_TOP });
 			}
 		}
-		param_length = (uint32_t)(ordered_properties.size() - default_value_properties.size());
+		param_length = static_cast<uint32_t>(ordered_properties.size() - default_value_properties.size());
 		func_instructions.push_back({ .op = opcode::LOAD_LOCAL, .operand = 1 });
 	}
 	func_instructions.push_back({ .op = opcode::RETURN });
@@ -840,7 +840,7 @@ std::optional<error> compiler::compile_class(tokenizer& tokenizer, std::vector<i
 
 std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 	std::vector<instruction> repl_section;
-	max_instruction = (uint32_t)target_instance.loaded_instructions.size();
+	max_instruction = static_cast<uint32_t>(target_instance.loaded_instructions.size());
 	func_decl_stack.back().max_locals = target_instance.top_level_local_offset;
 	max_globals = target_instance.global_offset;
 	
@@ -849,7 +849,7 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 	{
 		token& token = tokenizer.last_token();
 		source_loc& begin_loc = tokenizer.last_token_loc();
-		ip_src_map.insert({ (uint32_t)repl_section.size(), begin_loc });
+		ip_src_map.insert({ static_cast<uint32_t>(repl_section.size()), begin_loc });
 
 		switch (token.type)
 		{
@@ -915,12 +915,12 @@ std::optional<error> compiler::compile(tokenizer& tokenizer, bool repl_mode) {
 		repl_stop_parsing = false;
 	}
 	if (declared_toplevel_locals.size() > 0) {
-		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_LOCALS, .operand = (uint32_t)declared_toplevel_locals.size() });
+		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_LOCALS, .operand = static_cast<uint32_t>(declared_toplevel_locals.size()) });
 	}
 	if (declared_globals.size() > 0) {
-		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_GLOBALS, .operand = (uint32_t)declared_globals.size() });
+		target_instance.loaded_instructions.push_back({ .op = opcode::PROBE_GLOBALS, .operand = static_cast<uint32_t>(declared_globals.size()) });
 	}
-	uint32_t old_size = (uint32_t)target_instance.loaded_instructions.size();
+	uint32_t old_size = static_cast<uint32_t>(target_instance.loaded_instructions.size());
 	target_instance.loaded_instructions.insert(target_instance.loaded_instructions.end(), repl_section.begin(), repl_section.end());
 	declared_globals.clear();
 	declared_toplevel_locals.clear();
@@ -936,7 +936,7 @@ std::optional<error> compiler::compile_block(tokenizer& tokenizer, std::vector<i
 	std::optional<error> to_return = std::nullopt;
 
 	scope_stack.push_back({ }); //push empty lexical scope
-	uint32_t probe_ip = (uint32_t)current_section.size();
+	uint32_t probe_ip = static_cast<uint32_t>(current_section.size());
 	current_section.push_back({ .op = opcode::PROBE_LOCALS });
 	while (!stop_cond(tokenizer.last_token().type) && !tokenizer.match_last(token_type::END_OF_SOURCE))
 	{
@@ -953,14 +953,14 @@ unwind_and_return:
 void compiler::unwind_locals(std::vector<instruction>& instructions, uint32_t probe_ip, bool use_unwind_ins) {
 	if (use_unwind_ins) {
 		if (scope_stack.back().symbol_names.size() > 0) {
-			instructions[probe_ip].operand = (uint32_t)scope_stack.back().symbol_names.size();
-			instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = (uint32_t)scope_stack.back().symbol_names.size() });
+			instructions[probe_ip].operand = static_cast<uint32_t>(scope_stack.back().symbol_names.size());
+			instructions.push_back({ .op = opcode::UNWIND_LOCALS, .operand = static_cast<uint32_t>(scope_stack.back().symbol_names.size()) });
 		}
 		else {
 			auto it = instructions.erase(instructions.begin() + probe_ip);
 			for (; it != instructions.end(); it++) {
 				if (it->op == opcode::JUMP_BACK) {
-					uint32_t ip = (uint32_t)(it - instructions.begin());
+					uint32_t ip = static_cast<uint32_t>(it - instructions.begin());
 					uint32_t target_ip = ip - it->operand;
 					if (target_ip <= probe_ip) {
 						it->operand--;
@@ -1006,12 +1006,12 @@ void compiler::unwind_error() {
 	for (auto& local : declared_toplevel_locals) {
 		active_variables.erase(local);
 	}
-	func_decl_stack.back().max_locals -= (uint32_t)declared_toplevel_locals.size();
+	func_decl_stack.back().max_locals -= static_cast<uint32_t>(declared_toplevel_locals.size());
 	declared_toplevel_locals.clear();
 	for (auto& global : declared_globals) {
 		active_variables.erase(global);
 	}
-	max_globals -= (uint32_t)declared_globals.size();
+	max_globals -= static_cast<uint32_t>(declared_globals.size());
 	declared_globals.clear();
 
 	target_instance.loaded_instructions.erase(target_instance.loaded_instructions.begin() + max_instruction, target_instance.loaded_instructions.end());

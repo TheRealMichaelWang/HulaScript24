@@ -295,7 +295,7 @@ std::variant<value, error> instance::execute() {
 		{
 			LOAD_OPERAND(length_val, vtype::NUMBER);
 			
-			uint32_t size = (uint32_t)floor(length_val.number());
+			uint32_t size = static_cast<uint32_t>(floor(length_val.number()));
 			std::optional<uint64_t> res = allocate_table(size);
 			if (!res.has_value()) {
 				std::stringstream ss;
@@ -497,13 +497,13 @@ std::variant<value, error> instance::execute() {
 stop_exec:
 	if (current_error.has_value()) {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
-		start_ip = (uint32_t)loaded_instructions.size();
+		start_ip = static_cast<uint32_t>(loaded_instructions.size());
 		extended_local_offset = top_level_local_offset;
 		return current_error.value();
 	}
 	else {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
-		start_ip = (uint32_t)loaded_instructions.size();
+		start_ip = static_cast<uint32_t>(loaded_instructions.size());
 		assert(evaluation_stack.size() == 1);
 		assert(top_level_local_offset == extended_local_offset);
 		value to_return = evaluation_stack.back();

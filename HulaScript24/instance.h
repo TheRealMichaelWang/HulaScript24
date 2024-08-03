@@ -12,6 +12,7 @@
 #include "error.h"
 #include "value.h"
 #include "instructions.h"
+#include "ffi.h"
 #include "hash.h"
 
 namespace HulaScript::Compilation {
@@ -65,10 +66,6 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> return_stack;
 		std::vector<uint32_t> extended_offsets;
 
-		spp::sparsetable<value, SPP_DEFAULT_ALLOCATOR<value>> constants;
-		spp::sparse_hash_map<uint64_t, uint32_t> added_constant_hashes;
-		std::vector<uint32_t> available_constant_ids;
-
 		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, start_ip;
 		size_t table_offset, max_table;
 
@@ -84,6 +81,12 @@ namespace HulaScript::Runtime {
 		uint64_t next_table_id;
 		std::multimap<uint32_t, gc_block> free_tables;
 		spp::sparse_hash_set<char*> active_strs;
+
+		spp::sparsetable<value, SPP_DEFAULT_ALLOCATOR<value>> constants;
+		spp::sparse_hash_map<uint64_t, uint32_t> added_constant_hashes;
+		std::vector<uint32_t> available_constant_ids;
+
+		spp::sparsetable<foreign_resource, SPP_DEFAULT_ALLOCATOR<foreign_resource>> foreign_resources;
 
 		error type_error(vtype expected, vtype got, uint32_t ip);
 
