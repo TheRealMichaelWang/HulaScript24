@@ -202,7 +202,20 @@ std::variant<value, error> instance::execute() {
 		{
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
-			LOAD_OPERAND(table_val, vtype::TABLE);
+
+			auto table_val = evaluation_stack.back();
+			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
+				evaluation_stack.push_back(resource->load_key(key_val));
+				goto next_ins;
+			}
+			else if (table_val.type() != vtype::TABLE) {
+				current_error = type_error(vtype::TABLE, table_val.type(), ip);
+				goto stop_exec;
+			}
+			evaluation_stack.pop_back();
+
+			//LOAD_OPERAND(table_val, vtype::TABLE);
 
 			table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_key_hash();
@@ -234,7 +247,17 @@ std::variant<value, error> instance::execute() {
 			value key_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 
-			LOAD_OPERAND(table_val, vtype::TABLE);
+			auto table_val = evaluation_stack.back();
+			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
+				evaluation_stack.push_back(resource->set_key(key_val, store_val));
+				goto next_ins;
+			}
+			else if (table_val.type() != vtype::TABLE) {
+				current_error = type_error(vtype::TABLE, table_val.type(), ip);
+				goto stop_exec;
+			}
+			evaluation_stack.pop_back();
 
 			table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_key_hash();
@@ -426,7 +449,26 @@ std::variant<value, error> instance::execute() {
 		}
 		case opcode::CALL: 
 		{
-			LOAD_OPERAND(fn_val, vtype::CLOSURE);
+			auto fn_val = evaluation_stack.back();
+			if (fn_val.type() == vtype::FOREIGN_FUNCTION) {
+				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
+				foreign_function func = static_cast<foreign_function>(fn_val.raw_ptr());
+				auto res = func(args, ins.operand);
+				if (std::holds_alternative<error>(res)) {
+					current_error = std::get<error>(res);
+					goto stop_exec;
+				}
+				else {
+					evaluation_stack.push_back(std::get<value>(res));
+					goto next_ins;
+				}
+			}
+			else if (fn_val.type() != vtype::CLOSURE) {
+				current_error = type_error(vtype::CLOSURE, fn_val.type(), ip);
+				goto stop_exec;
+			}
+
+			evaluation_stack.pop_back();
 			auto fn_closure = fn_val.closure();
 
 			evaluation_stack.push_back(value(fn_closure.second));

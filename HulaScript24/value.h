@@ -27,25 +27,30 @@ namespace HulaScript::Runtime {
 		value(uint32_t raw_func_id, uint64_t raw_table_id) : _type(vtype::CLOSURE), func_id(raw_func_id), data({.table_id = raw_table_id}) { }
 
 		value(vtype type, uint64_t raw_data) : _type(type), func_id(0), data({.table_id = raw_data}){ }
+		value(vtype type, uint32_t func_id, void* raw_ptr) : _type(type), func_id(func_id), data({.ptr = raw_ptr}) { }
 
-		const vtype type() const {
+		constexpr vtype type() const {
 			return _type;
 		}
 
-		const double number() {
+		constexpr double number() const {
 			return data.number;
 		}
 
-		constexpr char* str() {
+		constexpr char* str() const {
 			return data.str;
 		}
 
-		const uint64_t table_id() {
+		constexpr uint64_t table_id() const {
 			return data.table_id;
 		}
 
-		const std::pair<uint32_t, uint64_t> closure() {
+		constexpr std::pair<uint32_t, uint64_t> closure() const {
 			return std::make_pair(func_id, data.table_id);
+		}
+
+		constexpr void* raw_ptr() const {
+			return data.ptr;
 		}
 
 		//computes a unique value hash
@@ -64,6 +69,7 @@ namespace HulaScript::Runtime {
 			double number;
 			uint64_t table_id;
 			char* str;
+			void* ptr;
 		} data;
 	};
 }
