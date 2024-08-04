@@ -15,6 +15,10 @@ const uint64_t value::compute_hash() {
 	case vtype::CLOSURE:
 		init_hash = hash_combine(func_id, data.table_id);
 		break;
+	case vtype::FOREIGN_RESOURCE:
+		[[fallthrough]];
+	case vtype::FOREIGN_FUNCTION:
+		[[fallthrough]];
 	case vtype::INTERNAL_CONSTHASH:
 		[[fallthrough]];
 	case vtype::NUMBER:

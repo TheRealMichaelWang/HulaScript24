@@ -19,6 +19,19 @@ namespace HulaScript {
 		std::string value_to_print_str(Runtime::value& value) {
 			return instance.value_to_print_str(value);
 		}
+
+		bool declare_global(std::string name, Runtime::value value) {
+			auto res = compiler.declare_global(name);
+			if (!res.has_value()) {
+				return false;
+			}
+			instance.set_global(res.value(), value);
+			return true;
+		}
+
+		bool declare_func(std::string name, Runtime::foreign_function_t func) {
+			return declare_global(name, Runtime::value(Runtime::vtype::FOREIGN_FUNCTION, 0, static_cast<void*>(func)));
+		}
 	private:
 		Runtime::instance instance;
 		Compilation::compiler compiler;
