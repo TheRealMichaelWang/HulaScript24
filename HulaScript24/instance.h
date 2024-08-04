@@ -87,7 +87,7 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> available_constant_ids;
 
 		spp::sparsetable<std::unique_ptr<foreign_resource>, SPP_DEFAULT_ALLOCATOR<std::unique_ptr<foreign_resource>>> foreign_resources;
-		std::vector<uint32_t> availibe_foreign_resource_ids;
+		std::vector<uint64_t> availibe_foreign_resource_ids;
 
 		error type_error(vtype expected, vtype got, uint32_t ip);
 
