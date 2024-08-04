@@ -1,27 +1,22 @@
 #pragma once
 
+#include <variant>
+#include "sparsepp/spp.h"
+#include "error.h"
 #include "value.h"
 
 namespace HulaScript::Runtime {
+	typedef std::variant<value, error>(*foreign_function)(value* args, uint32_t arg_c);
+
 	class foreign_resource
 	{
 	protected:
 		virtual void release() = 0;
 
 		friend class instance;
-	};
-
-	class foreign_function : foreign_resource {
-	public:
-		typedef value(*func_ptr)(value* args, uint32_t arg_c);
-
-		foreign_function(std::string name, std::optional<uint32_t> expected_arguments, func_ptr ptr) : name(name), expected_arguments(expected_arguments), ptr(ptr) { }
-
 	private:
-		std::string name;
-		std::optional<uint32_t> expected_arguments;
-		func_ptr ptr;
+		spp::sparse_hash_map<uint64_t, foreign_function> methods;
 
-		void release() override {};
+		friend class instance;
 	};
 }

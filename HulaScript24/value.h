@@ -12,7 +12,9 @@ namespace HulaScript::Runtime {
 		NUMBER = 1,
 		NIL = 0,
 
-		INTERNAL_CONSTHASH = 5
+		FOREIGN_RESOURCE = 5,
+		FOREIGN_FUNCTION = 6,
+		INTERNAL_CONSTHASH = 7
 	};
 
 	struct value {
