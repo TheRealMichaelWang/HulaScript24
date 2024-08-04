@@ -57,9 +57,8 @@ std::optional<uint64_t> instance::allocate_table(uint32_t element_count) {
 
 	uint64_t id;
 	if (available_table_ids.empty()) {
-		id = next_table_id;
-		next_table_id++;
-		table_entries.resize(next_table_id);
+		id = table_entries.size();
+		table_entries.resize(id + 1);
 	}
 	else {
 		id = available_table_ids.back();
@@ -119,10 +118,12 @@ void instance::garbage_collect(gc_collection_mode mode) {
 #define PUSH_TRACE(TO_TRACE) switch(TO_TRACE.type()) { case vtype::TABLE: tables_to_mark.push(TO_TRACE.table_id()); break;\
 														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
 														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
-														functions_to_mark.push(closure_info.first); tables_to_mark.push(closure_info.second); break; } }
+														functions_to_mark.push(closure_info.first); tables_to_mark.push(closure_info.second); break; }\
+														case vtype::FOREIGN_RESOURCE: marked_foreign_resources.insert(TO_TRACE.table_id()); }
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
+	std::set<uint64_t> marked_foreign_resources;
 	std::queue<uint32_t> functions_to_mark;
 
 	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
@@ -182,6 +183,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				}
 				break;
 			}
+			case vtype::FOREIGN_RESOURCE:
+				marked_foreign_resources.insert(val.table_id());
+				break;
 			}
 		}
 	}
@@ -189,6 +193,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	auto cmp_function_by_start = [this](uint32_t a, uint32_t b) -> bool {
 		return function_entries.unsafe_get(a).start_address < function_entries.unsafe_get(b).start_address;
 	};
+
 	std::set<uint32_t, decltype(cmp_function_by_start)> marked_functions(cmp_function_by_start);
 	while (!functions_to_mark.empty()) {
 		uint32_t id = functions_to_mark.front();
@@ -232,6 +237,19 @@ void instance::garbage_collect(gc_collection_mode mode) {
 			}
 			free(*it);
 			it = active_strs.erase(it);
+		}
+		else {
+			it++;
+		}
+	}
+
+	//release unreachable foreign resources
+	for (auto it = foreign_resources.ne_begin(); it != foreign_resources.ne_end();) {
+		size_t pos = table_entries.get_pos(it);
+		if (!marked_foreign_resources.contains(pos)) {
+			availibe_foreign_resource_ids.push_back(pos);
+			it->release();
+			it = foreign_resources.erase(it);
 		}
 		else {
 			it++;

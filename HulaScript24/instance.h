@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cassert>
 #include <vector>
 #include <map>
 #include <string>
@@ -28,6 +29,30 @@ namespace HulaScript::Runtime {
 		std::variant<value, error> execute();
 
 		std::string value_to_print_str(value& val);
+
+		value make_foreign_resource(std::unique_ptr<foreign_resource> resource) {
+			uint64_t id;
+			if (availibe_foreign_resource_ids.empty()) {
+				id = foreign_resources.size();
+				foreign_resources.resize(id + 1);
+			}
+			else {
+				id = availibe_foreign_resource_ids.back();
+				availibe_foreign_resource_ids.pop_back();
+			}
+			foreign_resources.set(id, resource);
+
+			return value(vtype::FOREIGN_RESOURCE, id);
+		}
+
+		value make_foreign_function(foreign_function_t func) {
+			return value(vtype::FOREIGN_FUNCTION, 0, static_cast<void*>(func));
+		}
+
+		void set_global(uint32_t global_id, value& val) {
+			assert(global_id < global_offset);
+			global_elems[global_id] = val;
+		}
 	private:
 		enum gc_collection_mode {
 			STANDARD = 0,
@@ -71,14 +96,13 @@ namespace HulaScript::Runtime {
 
 		std::vector<instruction> loaded_instructions;
 		std::map<uint32_t, source_loc> ip_src_locs;
-		uint32_t next_function_id, top_level_local_offset;
+		uint32_t top_level_local_offset;
 		
 		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
 		std::vector<uint32_t> available_function_ids;
 		
 		spp::sparsetable<table_entry, SPP_DEFAULT_ALLOCATOR<table_entry>> table_entries;
 		std::vector<uint64_t> available_table_ids;
-		uint64_t next_table_id;
 		std::multimap<uint32_t, gc_block> free_tables;
 		spp::sparse_hash_set<char*> active_strs;
 

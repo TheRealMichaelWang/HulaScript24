@@ -17,6 +17,29 @@ namespace HulaScript::Compilation {
 		compiler(HulaScript::Runtime::instance& instance, bool report_src_locs);
 
 		std::optional<error> compile(tokenizer& tokenizer, bool repl_mode);
+
+		std::optional<uint32_t> declare_global(std::string name) {
+			uint64_t hash = str_hash(name.c_str());
+			auto it = active_variables.find(hash);
+			if (it == active_variables.end()) {
+				if (target_instance.global_offset == target_instance.max_globals) {
+					return std::nullopt;
+				}
+
+				variable_symbol sym = {
+					.name = name,
+					.is_global = true,
+					.local_id = target_instance.global_offset
+				};
+				active_variables.insert({ hash, sym });
+				target_instance.global_offset++;
+				return sym.local_id;
+			}
+			else if (it->second.is_global) {
+				return it->second.local_id;
+			}
+			return std::nullopt;
+		}
 	private:
 		typedef HulaScript::Runtime::instance instance;
 		typedef HulaScript::Runtime::instruction instruction;

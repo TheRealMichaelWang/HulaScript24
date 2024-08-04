@@ -204,6 +204,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 
 			auto table_val = evaluation_stack.back();
+			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
 				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
 				evaluation_stack.push_back(resource->load_key(key_val));
@@ -213,7 +214,6 @@ std::variant<value, error> instance::execute() {
 				current_error = type_error(vtype::TABLE, table_val.type(), ip);
 				goto stop_exec;
 			}
-			evaluation_stack.pop_back();
 
 			//LOAD_OPERAND(table_val, vtype::TABLE);
 
@@ -248,6 +248,7 @@ std::variant<value, error> instance::execute() {
 			evaluation_stack.pop_back();
 
 			auto table_val = evaluation_stack.back();
+			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
 				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
 				evaluation_stack.push_back(resource->set_key(key_val, store_val));
@@ -257,7 +258,6 @@ std::variant<value, error> instance::execute() {
 				current_error = type_error(vtype::TABLE, table_val.type(), ip);
 				goto stop_exec;
 			}
-			evaluation_stack.pop_back();
 
 			table_entry& table_entry = table_entries.unsafe_get(table_val.table_id());
 			uint64_t hash = key_val.compute_key_hash();
@@ -450,10 +450,14 @@ std::variant<value, error> instance::execute() {
 		case opcode::CALL: 
 		{
 			auto fn_val = evaluation_stack.back();
+			evaluation_stack.pop_back();
+
 			if (fn_val.type() == vtype::FOREIGN_FUNCTION) {
 				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
-				foreign_function func = static_cast<foreign_function>(fn_val.raw_ptr());
+				foreign_function_t func = static_cast<foreign_function_t>(fn_val.raw_ptr());
 				auto res = func(args, ins.operand);
+				evaluation_stack.erase(evaluation_stack.end() - ins.operand, evaluation_stack.end());
+
 				if (std::holds_alternative<error>(res)) {
 					current_error = std::get<error>(res);
 					goto stop_exec;
@@ -468,7 +472,6 @@ std::variant<value, error> instance::execute() {
 				goto stop_exec;
 			}
 
-			evaluation_stack.pop_back();
 			auto fn_closure = fn_val.closure();
 
 			evaluation_stack.push_back(value(fn_closure.second));
@@ -559,8 +562,8 @@ stop_exec:
 uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {
 	uint32_t id;
 	if (available_function_ids.empty()) {
-		id = next_function_id++;
-		function_entries.resize(next_function_id);
+		id = static_cast<uint32_t>(function_entries.size());
+		function_entries.resize(id + 1);
 	}
 	else {
 		id = available_function_ids.back();

@@ -8,7 +8,8 @@
 #include "hash.h"
 
 namespace HulaScript::Runtime {
-	typedef std::variant<value, error>(*foreign_function)(value* args, uint32_t arg_c);
+	typedef std::variant<value, error> ffi_res_t;
+	typedef std::variant<value, error>(*foreign_function_t)(value* args, uint32_t arg_c);
 
 	class foreign_resource
 	{
@@ -21,7 +22,7 @@ namespace HulaScript::Runtime {
 
 	class foreign_object : public foreign_resource {
 	protected:
-		void register_function(std::string name, foreign_function func) {
+		void register_function(std::string name, foreign_function_t func) {
 			uint64_t hash = hash_combine(str_hash(name.c_str()), vtype::STRING);
 			methods.insert({ hash, func });
 		}
@@ -38,6 +39,6 @@ namespace HulaScript::Runtime {
 			return value();
 		}
 	private:
-		spp::sparse_hash_map<uint64_t, foreign_function> methods;
+		spp::sparse_hash_map<uint64_t, foreign_function_t> methods;
 	};
 }
