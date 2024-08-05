@@ -3,8 +3,17 @@
 #include <variant>
 #include "repl.h"
 
+using HulaScript::Runtime::value;
+using HulaScript::Runtime::instance;
+
 int main() {
 	HulaScript::repl_instance instance(std::nullopt, 256, 16, 256);
+	instance.declare_func("count_args", [](value* args, uint32_t argc) -> instance::ffi_res_t {
+		return value((double)argc);
+	}, std::nullopt);
+	instance.declare_func("add_func", [](value* args, uint32_t arg_c) -> instance::ffi_res_t {
+		return value(args[0].number() + args[1].number());
+	}, 2);
 
 	for (;;) {
 		char buf[256];

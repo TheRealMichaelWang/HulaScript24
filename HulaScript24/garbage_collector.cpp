@@ -119,11 +119,11 @@ void instance::garbage_collect(gc_collection_mode mode) {
 														case vtype::STRING: marked_strs.insert(TO_TRACE.str()); break;\
 														case vtype::CLOSURE: { auto closure_info = TO_TRACE.closure();\
 														functions_to_mark.push(closure_info.first); tables_to_mark.push(closure_info.second); break; }\
-														case vtype::FOREIGN_RESOURCE: marked_foreign_resources.insert(TO_TRACE.table_id()); }
+														case vtype::FOREIGN_RESOURCE: marked_foreign_resources.insert(static_cast<foreign_resource*>(TO_TRACE.raw_ptr())); }
 
 	std::queue<uint64_t> tables_to_mark;
 	std::set<char*> marked_strs;
-	std::set<uint64_t> marked_foreign_resources;
+	std::set<foreign_resource*> marked_foreign_resources;
 	std::queue<uint32_t> functions_to_mark;
 
 	for (uint_fast32_t i = 0; i < local_offset + extended_local_offset; i++)
@@ -184,7 +184,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 				break;
 			}
 			case vtype::FOREIGN_RESOURCE:
-				marked_foreign_resources.insert(val.table_id());
+				marked_foreign_resources.insert(static_cast<foreign_resource*>(val.raw_ptr()));
 				break;
 			}
 		}
@@ -244,11 +244,8 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	}
 
 	//release unreachable foreign resources
-	for (auto it = foreign_resources.ne_begin(); it != foreign_resources.ne_end();) {
-		size_t pos = table_entries.get_pos(it);
-		if (!marked_foreign_resources.contains(pos)) {
-			availibe_foreign_resource_ids.push_back(pos);
-			it->release();
+	for (auto it = foreign_resources.begin(); it != foreign_resources.end();) {
+		if (!marked_foreign_resources.contains(it->get())) {
 			it = foreign_resources.erase(it);
 		}
 		else {

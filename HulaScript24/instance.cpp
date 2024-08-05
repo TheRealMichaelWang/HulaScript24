@@ -21,7 +21,6 @@ instance::~instance() {
 	for (char* str : active_strs) {
 		free(str);
 	}
-
 	for (auto it = table_entries.ne_cbegin(); it != table_entries.ne_cend(); it++) {
 		free(it->key_hashes);
 	}

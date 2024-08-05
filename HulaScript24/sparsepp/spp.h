@@ -2030,7 +2030,7 @@ public:
         _alloc = alloc; // [gp todo] is this correct?
     }
 
-    sparsetable& operator=(sparsetable&& o)
+    sparsetable& operator=(sparsetable&& o) noexcept
     {
         _cleanup();
         this->swap(o);

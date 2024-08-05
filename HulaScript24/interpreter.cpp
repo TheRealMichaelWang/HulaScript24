@@ -206,8 +206,8 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.table_id());
-				auto res = resource->load_key(key_val);
+				auto resource = static_cast<foreign_resource*>(table_val.raw_ptr());
+				auto res = resource->load_key(key_val, *this);
 				if (std::holds_alternative<error>(res)) {
 					current_error = std::get<error>(res);
 					goto stop_exec;
@@ -258,8 +258,8 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.table_id());
-				auto res = resource->set_key(key_val, store_val);
+				auto resource = static_cast<foreign_resource*>(table_val.raw_ptr());
+				auto res = resource->set_key(key_val, store_val, *this);
 				if (std::holds_alternative<error>(res)) {
 					current_error = std::get<error>(res);
 					goto stop_exec;
@@ -469,8 +469,8 @@ std::variant<value, error> instance::execute() {
 
 			if (fn_val.type() == vtype::FOREIGN_RESOURCE) {
 				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(fn_val.table_id()));
-				auto res = resource.get()->invoke(args, ins.operand);
+				auto resource = static_cast<foreign_resource*>(fn_val.raw_ptr());
+				auto res = resource->invoke(args, ins.operand, *this);
 				evaluation_stack.erase(evaluation_stack.end() - ins.operand, evaluation_stack.end());
 
 				if (std::holds_alternative<error>(res)) {

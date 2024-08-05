@@ -7,13 +7,13 @@
 #include <string>
 #include <optional>
 #include <variant>
+#include <memory>
 
 #include "sparsepp/spp.h"
 
 #include "error.h"
 #include "value.h"
 #include "instructions.h"
-#include "ffi.h"
 #include "hash.h"
 
 namespace HulaScript::Compilation {
@@ -23,6 +23,18 @@ namespace HulaScript::Compilation {
 namespace HulaScript::Runtime {
 	class instance {
 	public:
+		typedef std::variant<value, error> ffi_res_t;
+
+		class foreign_resource
+		{
+		public:
+			virtual ~foreign_resource() { }
+
+			virtual ffi_res_t load_key(value& key_value, instance& instance) { return value(); }
+			virtual ffi_res_t set_key(value& key_value, value& type_value, instance& instance) { return value(); }
+
+			virtual ffi_res_t invoke(value* args, uint32_t arg_c, instance& instance) { return value(); }
+		};
 		instance(uint32_t max_locals, uint32_t max_globals, size_t max_table);
 		~instance();
 
@@ -30,19 +42,9 @@ namespace HulaScript::Runtime {
 
 		std::string value_to_print_str(value& val) const;
 
-		value make_foreign_resource(std::unique_ptr<foreign_resource> resource) {
-			uint64_t id;
-			if (availibe_foreign_resource_ids.empty()) {
-				id = foreign_resources.size();
-				foreign_resources.resize(id + 1);
-			}
-			else {
-				id = availibe_foreign_resource_ids.back();
-				availibe_foreign_resource_ids.pop_back();
-			}
-			foreign_resources.set(id, resource);
-
-			return value(vtype::FOREIGN_RESOURCE, id);
+		value make_foreign_resource(std::shared_ptr<foreign_resource> resource) {
+			foreign_resources.insert(resource);
+			return value(vtype::FOREIGN_RESOURCE, static_cast<void*>(resource.get()));
 		}
 
 		void set_global(uint32_t global_id, value& val) {
@@ -120,8 +122,7 @@ namespace HulaScript::Runtime {
 		spp::sparse_hash_map<uint64_t, uint32_t> added_constant_hashes;
 		std::vector<uint32_t> available_constant_ids;
 
-		spp::sparsetable<std::unique_ptr<foreign_resource>, SPP_DEFAULT_ALLOCATOR<std::unique_ptr<foreign_resource>>> foreign_resources;
-		std::vector<uint64_t> availibe_foreign_resource_ids;
+		spp::sparse_hash_set<std::shared_ptr<foreign_resource>> foreign_resources;
 
 		error type_error(vtype expected, vtype got);
 
