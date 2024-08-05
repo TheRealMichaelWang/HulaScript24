@@ -28,7 +28,7 @@ namespace HulaScript::Runtime {
 
 		std::variant<value, error> execute();
 
-		std::string value_to_print_str(value& val);
+		std::string value_to_print_str(value& val) const;
 
 		value make_foreign_resource(std::unique_ptr<foreign_resource> resource) {
 			uint64_t id;
@@ -45,13 +45,23 @@ namespace HulaScript::Runtime {
 			return value(vtype::FOREIGN_RESOURCE, id);
 		}
 
-		value make_foreign_function(foreign_function_t func) {
-			return value(vtype::FOREIGN_FUNCTION, 0, static_cast<void*>(func));
-		}
-
 		void set_global(uint32_t global_id, value& val) {
 			assert(global_id < global_offset);
 			global_elems[global_id] = val;
+		}
+
+		error make_error(etype type, std::optional<std::string> msg) const {
+			std::vector<std::pair<std::optional<source_loc>, uint32_t>> stack_trace;
+			for (auto it = return_stack.begin(); it != return_stack.end(); ) {
+				uint32_t ip = *it;
+				uint32_t repeats = 0;
+				do {
+					it++;
+					repeats++;
+				} while (it != return_stack.end() && ip == *it);
+				stack_trace.push_back(std::make_pair(loc_from_ip(ip), repeats));
+			}
+			return error(type, msg, loc_from_ip(current_ip), stack_trace);
 		}
 	private:
 		enum gc_collection_mode {
@@ -96,7 +106,7 @@ namespace HulaScript::Runtime {
 
 		std::vector<instruction> loaded_instructions;
 		std::map<uint32_t, source_loc> ip_src_locs;
-		uint32_t top_level_local_offset;
+		uint32_t top_level_local_offset, current_ip;
 		
 		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
 		std::vector<uint32_t> available_function_ids;
@@ -113,7 +123,7 @@ namespace HulaScript::Runtime {
 		spp::sparsetable<std::unique_ptr<foreign_resource>, SPP_DEFAULT_ALLOCATOR<std::unique_ptr<foreign_resource>>> foreign_resources;
 		std::vector<uint64_t> availibe_foreign_resource_ids;
 
-		error type_error(vtype expected, vtype got, uint32_t ip);
+		error type_error(vtype expected, vtype got);
 
 		std::optional<gc_block> allocate_block(uint32_t element_count);
 		std::optional<uint64_t> allocate_table(uint32_t element_count);
@@ -133,27 +143,13 @@ namespace HulaScript::Runtime {
 			return add_constant(value(vtype::INTERNAL_CONSTHASH, key.compute_hash()));
 		}
 
-		std::optional<source_loc> loc_from_ip(uint32_t ip) {
+		const std::optional<source_loc> loc_from_ip(uint32_t ip) const {
 			auto it = ip_src_locs.upper_bound(ip);
 			if (it != ip_src_locs.begin()) {
 				it--;
 				return it->second;
 			}
 			return std::nullopt;
-		}
-
-		error make_error(etype type, std::optional<std::string> msg, uint32_t ip) {
-			std::vector<std::pair<std::optional<source_loc>, uint32_t>> stack_trace;
-			for (auto it = return_stack.begin(); it != return_stack.end(); ) {
-				uint32_t ip = *it;
-				uint32_t repeats = 0;
-				do {
-					it++;
-					repeats++;
-				} while (it != return_stack.end() && ip == *it);
-				stack_trace.push_back(std::make_pair(loc_from_ip(ip), repeats));
-			}
-			return error(type, msg, loc_from_ip(ip), stack_trace);
 		}
 
 		friend class HulaScript::Compilation::compiler;

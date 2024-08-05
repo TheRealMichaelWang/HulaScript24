@@ -60,7 +60,7 @@ uint32_t instance::add_constant(value constant) {
 	return it->second;
 }
 
-error instance::type_error(vtype expected, vtype got, uint32_t ip) {
+error instance::type_error(vtype expected, vtype got) {
 	static const char* type_names[] = {
 		"nil",
 		"number",
@@ -72,5 +72,5 @@ error instance::type_error(vtype expected, vtype got, uint32_t ip) {
 	std::stringstream ss;
 	ss << "Expected type " << type_names[expected] << " but got " << type_names[got] << " instead.";
 
-	return make_error(etype::UNEXPECTED_TYPE, ss.str(), ip);
+	return make_error(etype::UNEXPECTED_TYPE, ss.str());
 }

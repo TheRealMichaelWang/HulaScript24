@@ -136,6 +136,7 @@
     <ClInclude Include="compiler.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="ffi.h" />
+    <ClInclude Include="ffi_utils.h" />
     <ClInclude Include="instance.h" />
     <ClInclude Include="hash.h" />
     <ClInclude Include="instructions.h" />
