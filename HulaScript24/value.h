@@ -26,6 +26,7 @@ namespace HulaScript::Runtime {
 		value(uint32_t raw_func_id, uint64_t raw_table_id) : _type(vtype::CLOSURE), func_id(raw_func_id), data({.table_id = raw_table_id}) { }
 
 		value(vtype type, uint64_t raw_data) : _type(type), func_id(0), data({.table_id = raw_data}){ }
+		value(vtype type, void* raw_id) : _type(type), func_id(0), data({ .ptr = raw_id }) { }
 
 		constexpr vtype type() const {
 			return _type;

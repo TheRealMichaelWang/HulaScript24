@@ -3,6 +3,7 @@
 #include <vector>
 #include <variant>
 #include <string>
+#include <memory>
 #include "instance.h"
 #include "compiler.h"
 #include "ffi_utils.h"
@@ -30,9 +31,8 @@ namespace HulaScript {
 			return true;
 		}
 
-		bool declare_func(std::string name, Runtime::ffi_res_t(*func)(Runtime::value*, uint32_t), std::optional<uint32_t> expected_params) {
-			auto x = std::make_unique<Runtime::foreign_resource>(new Runtime::foreign_function(name, func, instance, expected_params));
-			return declare_global(name, instance.make_foreign_resource(x));
+		bool declare_func(std::string name, Runtime::instance::ffi_res_t(*func)(Runtime::value*, uint32_t), std::optional<uint32_t> expected_params) {
+			return declare_global(name, instance.make_foreign_resource(std::shared_ptr<Runtime::instance::foreign_resource>(new Runtime::foreign_function(name, func, instance, expected_params))));
 		}
 	private:
 		Runtime::instance instance;

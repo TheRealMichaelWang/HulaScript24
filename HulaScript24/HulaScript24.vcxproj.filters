@@ -69,9 +69,6 @@
     <ClInclude Include="instructions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ffi.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ffi_utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -403,8 +403,8 @@ public:
     libc_allocator& operator=(const libc_allocator<U> &) { return *this; }
 
 #ifndef SPP_NO_CXX11_RVALUE_REFERENCES    
-    libc_allocator(libc_allocator &&) {}
-    libc_allocator& operator=(libc_allocator &&) { return *this; }
+    libc_allocator(libc_allocator &&) noexcept {}
+    libc_allocator& operator=(libc_allocator &&) noexcept { return *this; }
 #endif
 
     pointer allocate(size_t n, const_pointer  /* unused */= 0) 
