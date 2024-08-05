@@ -9,7 +9,8 @@
 
 namespace HulaScript::Runtime {
 	typedef std::variant<value, error> ffi_res_t;
-	typedef std::variant<value, error>(*foreign_function_t)(value* args, uint32_t arg_c);
+	typedef ffi_res_t(*foreign_function_t)(value* args, uint32_t arg_c);
+	typedef ffi_res_t(*foreign_member_t)(value* args, uint32_t arg_c, foreign_resource* resource);
 
 	class foreign_resource
 	{

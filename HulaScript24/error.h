@@ -26,7 +26,8 @@ namespace HulaScript::Runtime {
 		UNEXPECTED_TYPE,
 		ARGUMENT_COUNT_MISMATCH,
 		MEMORY,
-		INTERNAL_ERROR
+		INTERNAL_ERROR,
+		FOREIGN_RESOURCE
 	};
 
 	class error {

@@ -206,7 +206,7 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.capture_id());
 				evaluation_stack.push_back(resource->load_key(key_val));
 				goto next_ins;
 			}
@@ -250,7 +250,7 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.capture_id());
 				evaluation_stack.push_back(resource->set_key(key_val, store_val));
 				goto next_ins;
 			}
@@ -452,7 +452,9 @@ std::variant<value, error> instance::execute() {
 			auto fn_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 
-			if (fn_val.type() == vtype::FOREIGN_FUNCTION) {
+			switch (fn_val.type())
+			{
+			case vtype::FOREIGN_FUNCTION: {
 				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
 				foreign_function_t func = static_cast<foreign_function_t>(fn_val.raw_ptr());
 				auto res = func(args, ins.operand);
@@ -467,7 +469,25 @@ std::variant<value, error> instance::execute() {
 					goto next_ins;
 				}
 			}
-			else if (fn_val.type() != vtype::CLOSURE) {
+			case vtype::FOREIGN_MEMBER: {
+				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
+				foreign_resource* resource = foreign_resources.unsafe_get(fn_val.capture_id()).get();
+				foreign_member_t func = static_cast<foreign_member_t>(fn_val.raw_ptr());
+				auto res = func(args, ins.operand, resource);
+				evaluation_stack.erase(evaluation_stack.end() - ins.operand, evaluation_stack.end());
+				
+				if (std::holds_alternative<error>(res)) {
+					current_error = std::get<error>(res);
+					goto stop_exec;
+				}
+				else {
+					evaluation_stack.push_back(std::get<value>(res));
+					goto next_ins;
+				}
+			}
+			case vtype::CLOSURE:
+				break;
+			default:
 				current_error = type_error(vtype::CLOSURE, fn_val.type(), ip);
 				goto stop_exec;
 			}

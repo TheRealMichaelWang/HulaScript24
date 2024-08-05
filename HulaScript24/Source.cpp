@@ -8,7 +8,6 @@ int main() {
 
 	for (;;) {
 		char buf[256];
-		//std::getline(std::cin, line);
 		std::cin.getline(buf, 256);
 
 		auto input_res = instance.write_input(std::string(buf));

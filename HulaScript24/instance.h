@@ -31,9 +31,9 @@ namespace HulaScript::Runtime {
 		std::string value_to_print_str(value& val);
 
 		value make_foreign_resource(std::unique_ptr<foreign_resource> resource) {
-			uint64_t id;
+			uint32_t id;
 			if (availibe_foreign_resource_ids.empty()) {
-				id = foreign_resources.size();
+				id = static_cast<uint32_t>(foreign_resources.size());
 				foreign_resources.resize(id + 1);
 			}
 			else {
@@ -111,7 +111,7 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> available_constant_ids;
 
 		spp::sparsetable<std::unique_ptr<foreign_resource>, SPP_DEFAULT_ALLOCATOR<std::unique_ptr<foreign_resource>>> foreign_resources;
-		std::vector<uint64_t> availibe_foreign_resource_ids;
+		std::vector<uint32_t> availibe_foreign_resource_ids;
 
 		error type_error(vtype expected, vtype got, uint32_t ip);
 

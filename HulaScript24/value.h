@@ -14,7 +14,8 @@ namespace HulaScript::Runtime {
 
 		FOREIGN_RESOURCE = 5,
 		FOREIGN_FUNCTION = 6,
-		INTERNAL_CONSTHASH = 7
+		FOREIGN_MEMBER = 7,
+		INTERNAL_CONSTHASH = 8
 	};
 
 	struct value {
@@ -43,6 +44,10 @@ namespace HulaScript::Runtime {
 
 		constexpr uint64_t table_id() const {
 			return data.table_id;
+		}
+
+		constexpr uint32_t capture_id() const {
+			return func_id;
 		}
 
 		constexpr std::pair<uint32_t, uint64_t> closure() const {
