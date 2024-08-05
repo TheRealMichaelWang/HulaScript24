@@ -8,7 +8,7 @@
 
 using namespace HulaScript::Runtime;
 
-const uint64_t value::compute_hash() {
+const uint64_t value::compute_hash() const {
 	uint64_t init_hash = 0;
 	switch (_type)
 	{
@@ -16,8 +16,6 @@ const uint64_t value::compute_hash() {
 		init_hash = hash_combine(func_id, data.table_id);
 		break;
 	case vtype::FOREIGN_RESOURCE:
-		[[fallthrough]];
-	case vtype::FOREIGN_FUNCTION:
 		[[fallthrough]];
 	case vtype::INTERNAL_CONSTHASH:
 		[[fallthrough]];
@@ -36,7 +34,7 @@ const uint64_t value::compute_hash() {
 	return hash_combine(init_hash, (uint64_t)_type);
 }
 
-const uint64_t value::compute_key_hash() {
+const uint64_t value::compute_key_hash() const {
 	switch (_type)
 	{
 	case vtype::INTERNAL_CONSTHASH:
@@ -46,7 +44,7 @@ const uint64_t value::compute_key_hash() {
 	}
 }
 
-std::string instance::value_to_print_str(value& val) {
+std::string instance::value_to_print_str(value& val) const {
 	switch (val.type())
 	{
 	case HulaScript::Runtime::CLOSURE: {

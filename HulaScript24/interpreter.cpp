@@ -9,20 +9,20 @@ std::variant<value, error> instance::execute() {
 	auto table_hashid_comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
 
 	instruction* instructions = loaded_instructions.data();
-	uint_fast32_t ip = start_ip;
+	current_ip = start_ip;
 	local_offset = 0;
 
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
 													evaluation_stack.pop_back();\
 													if(OPERAND_NAME.type() != EXPECTED_TYPE) {\
-														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type(), ip);\
+														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type());\
 														goto stop_exec;\
 													}\
 
 	std::optional<error> current_error = std::nullopt;
-	while (ip != loaded_instructions.size())
+	while (current_ip != loaded_instructions.size())
 	{
-		instruction& ins = instructions[ip];
+		instruction& ins = instructions[current_ip];
 
 		switch (ins.op)
 		{
@@ -161,13 +161,13 @@ std::variant<value, error> instance::execute() {
 			goto next_ins;
 		case opcode::PROBE_LOCALS:
 			if (local_offset + extended_local_offset + ins.operand > max_locals) {
-				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.", ip);
+				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating local.");
 				goto stop_exec;
 			}
 			goto next_ins;
 		case opcode::PROBE_GLOBALS:
 			if (global_offset + ins.operand > max_locals) {
-				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.", ip);
+				current_error = make_error(etype::MEMORY, "Stack Overflow: ran out of memory while allocating globals.");
 				goto stop_exec;
 			}
 			goto next_ins;
@@ -206,12 +206,20 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
-				evaluation_stack.push_back(resource->load_key(key_val));
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.table_id());
+				auto res = resource->load_key(key_val);
+				if (std::holds_alternative<error>(res)) {
+					current_error = std::get<error>(res);
+					goto stop_exec;
+				}
+				else {
+					evaluation_stack.push_back(std::get<value>(res));
+					goto next_ins;
+				}
 				goto next_ins;
 			}
 			else if (table_val.type() != vtype::TABLE) {
-				current_error = type_error(vtype::TABLE, table_val.type(), ip);
+				current_error = type_error(vtype::TABLE, table_val.type());
 				goto stop_exec;
 			}
 
@@ -250,12 +258,19 @@ std::variant<value, error> instance::execute() {
 			auto table_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 			if (table_val.type() == vtype::FOREIGN_RESOURCE) {
-				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(table_val.table_id()));
-				evaluation_stack.push_back(resource->set_key(key_val, store_val));
-				goto next_ins;
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(table_val.table_id());
+				auto res = resource->set_key(key_val, store_val);
+				if (std::holds_alternative<error>(res)) {
+					current_error = std::get<error>(res);
+					goto stop_exec;
+				}
+				else {
+					evaluation_stack.push_back(std::get<value>(res));
+					goto next_ins;
+				}
 			}
 			else if (table_val.type() != vtype::TABLE) {
-				current_error = type_error(vtype::TABLE, table_val.type(), ip);
+				current_error = type_error(vtype::TABLE, table_val.type());
 				goto stop_exec;
 			}
 
@@ -289,7 +304,7 @@ std::variant<value, error> instance::execute() {
 				table_entry.key_hash_capacity += 1;
 				auto new_buffer = (std::pair<uint64_t, uint32_t>*)realloc(table_entry.key_hashes, table_entry.key_hash_capacity * sizeof(std::pair<uint64_t, uint32_t>));
 				if (new_buffer == NULL) {
-					current_error = make_error(etype::MEMORY, "Cannot add new element to table.", ip);
+					current_error = make_error(etype::MEMORY, "Cannot add new element to table.");
 					goto stop_exec;
 				}
 				table_entry.key_hashes = new_buffer;
@@ -304,7 +319,7 @@ std::variant<value, error> instance::execute() {
 				scratchpad_stack.push_back(table_val);
 				if (!reallocate_table(table_val.table_id(), 4, 1))
 				{
-					current_error = make_error(etype::MEMORY, "Failed to add to table.", ip);
+					current_error = make_error(etype::MEMORY, "Failed to add to table.");
 					goto stop_exec;
 				}
 				scratchpad_stack.pop_back();
@@ -327,7 +342,7 @@ std::variant<value, error> instance::execute() {
 					ss << "(rounded to " << size << ")";
 				}
 				ss << '.';
-				current_error = make_error(etype::MEMORY, ss.str(), ip);
+				current_error = make_error(etype::MEMORY, ss.str());
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -338,7 +353,7 @@ std::variant<value, error> instance::execute() {
 			if (!res.has_value()) {
 				std::stringstream ss;
 				ss << "Failed to allocate new array with " << ins.operand << " elements.";
-				current_error = make_error(etype::MEMORY, ss.str(), ip);
+				current_error = make_error(etype::MEMORY, ss.str());
 				goto stop_exec;
 			}
 			evaluation_stack.push_back(value(res.value()));
@@ -354,7 +369,7 @@ std::variant<value, error> instance::execute() {
 		}
 		[[fallthrough]];
 		case opcode::JUMP_AHEAD:
-			ip += ins.operand;
+			current_ip += ins.operand;
 			continue;
 		case opcode::COND_JUMP_BACK: //used primarily for do..while
 		{
@@ -364,13 +379,13 @@ std::variant<value, error> instance::execute() {
 		}
 		[[fallthrough]];
 		case opcode::JUMP_BACK:
-			ip -= ins.operand;
+			current_ip -= ins.operand;
 			continue;
 		case opcode::IF_NIL_JUMP_AHEAD:
 		{
 			if (evaluation_stack.back().type() == vtype::NIL) {
 				evaluation_stack.pop_back();
-				ip += ins.operand;
+				current_ip += ins.operand;
 				continue;
 			}
 			goto next_ins;
@@ -381,7 +396,7 @@ std::variant<value, error> instance::execute() {
 				goto next_ins;
 			}
 			else {
-				ip += ins.operand;
+				current_ip += ins.operand;
 				continue;
 			}
 		}
@@ -390,10 +405,10 @@ std::variant<value, error> instance::execute() {
 		case opcode::FUNCTION:
 		{
 			uint32_t id = ins.operand;
-			uint32_t end_addr = ip;
+			uint32_t end_addr = current_ip;
 
 			loaded_function_entry entry = {
-				.start_address = ip + 1
+				.start_address = current_ip + 1
 			};
 			spp::sparse_hash_set<uint32_t> referenced_func_ids;
 			spp::sparse_hash_set<char*> referenced_strs;
@@ -417,8 +432,8 @@ std::variant<value, error> instance::execute() {
 				end_addr++;
 				if (end_addr == loaded_instructions.size()) {
 					std::stringstream ss;
-					ss << "No matching function end instruction for function instruction at " << ip << '.';
-					current_error = make_error(etype::INTERNAL_ERROR, ss.str(), end_addr);
+					ss << "No matching function end instruction for function instruction at " << end_addr << '.';
+					current_error = make_error(etype::INTERNAL_ERROR, ss.str());
 					goto stop_exec;
 				}
 			} while (instructions[end_addr].op != opcode::FUNCTION_END);
@@ -427,15 +442,15 @@ std::variant<value, error> instance::execute() {
 			entry.referenced_func_ids.insert(entry.referenced_func_ids.begin(), referenced_func_ids.begin(), referenced_func_ids.end());
 			entry.referenced_const_strs.reserve(referenced_strs.size());
 			entry.referenced_const_strs.insert(entry.referenced_const_strs.begin(), referenced_strs.begin(), referenced_strs.end());
-			entry.length = end_addr - ip;
-			ip = end_addr;
+			entry.length = end_addr - current_ip;
+			current_ip = end_addr;
 
-			instruction end_ins = instructions[ip];
+			instruction end_ins = instructions[current_ip];
 			entry.parameter_count = end_ins.operand;
 
 			function_entries.set(id, entry);
 
-			ip++;
+			current_ip++;
 			continue;
 		}
 		case opcode::FUNCTION_END: //automatically return if this instruction is ever reached
@@ -452,10 +467,10 @@ std::variant<value, error> instance::execute() {
 			auto fn_val = evaluation_stack.back();
 			evaluation_stack.pop_back();
 
-			if (fn_val.type() == vtype::FOREIGN_FUNCTION) {
+			if (fn_val.type() == vtype::FOREIGN_RESOURCE) {
 				value* args = evaluation_stack.data() + (evaluation_stack.size() - ins.operand);
-				foreign_function_t func = static_cast<foreign_function_t>(fn_val.raw_ptr());
-				auto res = func(args, ins.operand);
+				std::unique_ptr<foreign_resource>& resource = foreign_resources.unsafe_get(static_cast<uint32_t>(fn_val.table_id()));
+				auto res = resource.get()->invoke(args, ins.operand);
 				evaluation_stack.erase(evaluation_stack.end() - ins.operand, evaluation_stack.end());
 
 				if (std::holds_alternative<error>(res)) {
@@ -468,7 +483,7 @@ std::variant<value, error> instance::execute() {
 				}
 			}
 			else if (fn_val.type() != vtype::CLOSURE) {
-				current_error = type_error(vtype::CLOSURE, fn_val.type(), ip);
+				current_error = type_error(vtype::CLOSURE, fn_val.type());
 				goto stop_exec;
 			}
 
@@ -476,7 +491,7 @@ std::variant<value, error> instance::execute() {
 
 			evaluation_stack.push_back(value(fn_closure.second));
 
-			return_stack.push_back(ip);
+			return_stack.push_back(current_ip);
 			loaded_function_entry& fn_entry = function_entries.unsafe_get(fn_closure.first);
 
 			if (fn_entry.parameter_count != ins.operand) { //argument count mismatch
@@ -488,18 +503,18 @@ std::variant<value, error> instance::execute() {
 				}
 
 				ss << " expected " << fn_entry.parameter_count << " argument(s), but got " << ins.operand << " instead.";
-				current_error = make_error(etype::ARGUMENT_COUNT_MISMATCH, ss.str(), ip);
+				current_error = make_error(etype::ARGUMENT_COUNT_MISMATCH, ss.str());
 				goto stop_exec;
 			}
 
 			local_offset += extended_local_offset;
 			extended_offsets.push_back(extended_local_offset);
 			extended_local_offset = 0;
-			ip = fn_entry.start_address;
+			current_ip = fn_entry.start_address;
 			continue;
 		}
 		case opcode::CALL_NO_CAPUTRE_TABLE: {
-			return_stack.push_back(ip);
+			return_stack.push_back(current_ip);
 			loaded_function_entry& fn_entry = function_entries.unsafe_get(ins.operand); 
 			
 			//no parameter count check - use instruction at your own risk! 
@@ -507,7 +522,7 @@ std::variant<value, error> instance::execute() {
 			local_offset += extended_local_offset;
 			extended_offsets.push_back(extended_local_offset);
 			extended_local_offset = 0;
-			ip = fn_entry.start_address;
+			current_ip = fn_entry.start_address;
 			continue;
 		}
 		case opcode::RETURN:
@@ -515,25 +530,25 @@ std::variant<value, error> instance::execute() {
 			if (return_stack.empty())
 				goto stop_exec;
 
-			ip = return_stack.back();
+			current_ip = return_stack.back();
 			return_stack.pop_back();
 			extended_local_offset = extended_offsets.back();
 			extended_offsets.pop_back();
 			local_offset -= extended_local_offset;
 			goto next_ins;
 		case opcode::INVALID:
-			current_error = make_error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction", ip);
+			current_error = make_error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction");
 			goto stop_exec;
 		default: {
 			std::stringstream ss;
 			ss << "Unrecognized opcode " << ins.op << " is unhandled.";
-			current_error = make_error(etype::INTERNAL_ERROR, ss.str(), ip);
+			current_error = make_error(etype::INTERNAL_ERROR, ss.str());
 			goto stop_exec;
 		}
 		}
 
 	next_ins:
-		ip++;
+		current_ip++;
 	}
 	
 	if (evaluation_stack.empty())

@@ -5,6 +5,7 @@
 #include <string>
 #include "instance.h"
 #include "compiler.h"
+#include "ffi_utils.h"
 
 namespace HulaScript {
 	class repl_instance {
@@ -29,8 +30,9 @@ namespace HulaScript {
 			return true;
 		}
 
-		bool declare_func(std::string name, Runtime::foreign_function_t func) {
-			return declare_global(name, Runtime::value(Runtime::vtype::FOREIGN_FUNCTION, 0, static_cast<void*>(func)));
+		bool declare_func(std::string name, Runtime::ffi_res_t(*func)(Runtime::value*, uint32_t), std::optional<uint32_t> expected_params) {
+			auto x = std::make_unique<Runtime::foreign_resource>(new Runtime::foreign_function(name, func, instance, expected_params));
+			return declare_global(name, instance.make_foreign_resource(x));
 		}
 	private:
 		Runtime::instance instance;

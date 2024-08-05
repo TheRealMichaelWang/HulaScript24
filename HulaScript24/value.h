@@ -13,7 +13,6 @@ namespace HulaScript::Runtime {
 		NIL = 0,
 
 		FOREIGN_RESOURCE = 5,
-		FOREIGN_FUNCTION = 6,
 		INTERNAL_CONSTHASH = 7
 	};
 
@@ -27,7 +26,6 @@ namespace HulaScript::Runtime {
 		value(uint32_t raw_func_id, uint64_t raw_table_id) : _type(vtype::CLOSURE), func_id(raw_func_id), data({.table_id = raw_table_id}) { }
 
 		value(vtype type, uint64_t raw_data) : _type(type), func_id(0), data({.table_id = raw_data}){ }
-		value(vtype type, uint32_t func_id, void* raw_ptr) : _type(type), func_id(func_id), data({.ptr = raw_ptr}) { }
 
 		constexpr vtype type() const {
 			return _type;
@@ -54,10 +52,10 @@ namespace HulaScript::Runtime {
 		}
 
 		//computes a unique value hash
-		const uint64_t compute_hash();
+		const uint64_t compute_hash() const;
 
 		//computes a hash specifically to represent value keys
-		const uint64_t compute_key_hash();
+		const uint64_t compute_key_hash() const;
 
 		//std::string to_print_string();
 	private:
