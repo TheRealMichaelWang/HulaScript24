@@ -28,13 +28,34 @@ namespace HulaScript::Runtime {
 		class foreign_resource
 		{
 		public:
-			virtual ~foreign_resource() { }
+			foreign_resource() : ref_count(0) { }
+
+			virtual void release() { }
 
 			virtual ffi_res_t load_key(value& key_value, instance& instance) { return value(); }
 			virtual ffi_res_t set_key(value& key_value, value& type_value, instance& instance) { return value(); }
 
 			virtual ffi_res_t invoke(value* args, uint32_t arg_c, instance& instance) { return value(); }
+
+			void unref() {
+				if (ref_count == 0) {
+					this->release();
+					delete this;
+				}
+				else {
+					ref_count--;
+				}
+			}
+
+			foreign_resource* ref() {
+				ref_count++;
+				return this;
+			}
+
+		private:
+			size_t ref_count;
 		};
+
 		instance(uint32_t max_locals, uint32_t max_globals, size_t max_table);
 		~instance();
 
@@ -42,9 +63,12 @@ namespace HulaScript::Runtime {
 
 		std::string value_to_print_str(value& val) const;
 
-		value make_foreign_resource(std::shared_ptr<foreign_resource> resource) {
-			foreign_resources.insert(resource);
-			return value(vtype::FOREIGN_RESOURCE, static_cast<void*>(resource.get()));
+		value make_foreign_resource(foreign_resource* resource, bool assume_ownership=true) {
+			auto res = foreign_resources.insert(resource);
+			if (res.second && !assume_ownership) {
+				resource->ref();
+			}
+			return value(vtype::FOREIGN_RESOURCE, static_cast<void*>(resource));
 		}
 
 		void set_global(uint32_t global_id, value& val) {
@@ -103,12 +127,12 @@ namespace HulaScript::Runtime {
 		std::vector<uint32_t> return_stack;
 		std::vector<uint32_t> extended_offsets;
 
-		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, start_ip;
+		uint32_t local_offset, extended_local_offset, global_offset, max_locals, max_globals, current_ip;
 		size_t table_offset, max_table;
 
 		std::vector<instruction> loaded_instructions;
 		std::map<uint32_t, source_loc> ip_src_locs;
-		uint32_t top_level_local_offset, current_ip;
+		uint32_t top_level_local_offset;
 		
 		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
 		std::vector<uint32_t> available_function_ids;
@@ -122,7 +146,7 @@ namespace HulaScript::Runtime {
 		spp::sparse_hash_map<uint64_t, uint32_t> added_constant_hashes;
 		std::vector<uint32_t> available_constant_ids;
 
-		spp::sparse_hash_set<std::shared_ptr<foreign_resource>> foreign_resources;
+		spp::sparse_hash_set<foreign_resource*> foreign_resources;
 
 		error type_error(vtype expected, vtype got);
 

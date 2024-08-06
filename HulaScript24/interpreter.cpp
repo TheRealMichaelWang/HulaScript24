@@ -9,7 +9,6 @@ std::variant<value, error> instance::execute() {
 	auto table_hashid_comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
 
 	instruction* instructions = loaded_instructions.data();
-	current_ip = start_ip;
 	local_offset = 0;
 
 #define LOAD_OPERAND(OPERAND_NAME, EXPECTED_TYPE)	value OPERAND_NAME = evaluation_stack.back();\
@@ -557,13 +556,11 @@ std::variant<value, error> instance::execute() {
 stop_exec:
 	if (current_error.has_value()) {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
-		start_ip = static_cast<uint32_t>(loaded_instructions.size());
 		extended_local_offset = top_level_local_offset;
 		return current_error.value();
 	}
 	else {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
-		start_ip = static_cast<uint32_t>(loaded_instructions.size());
 		assert(evaluation_stack.size() == 1);
 		assert(top_level_local_offset == extended_local_offset);
 		value to_return = evaluation_stack.back();
