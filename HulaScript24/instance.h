@@ -23,7 +23,7 @@ namespace HulaScript::Compilation {
 namespace HulaScript::Runtime {
 	class instance {
 	public:
-		typedef std::variant<value, error> ffi_res_t;
+		typedef std::variant<value, error> result_t;
 
 		class foreign_resource
 		{
@@ -32,10 +32,12 @@ namespace HulaScript::Runtime {
 
 			virtual void release() { }
 
-			virtual ffi_res_t load_key(value& key_value, instance& instance) { return value(); }
-			virtual ffi_res_t set_key(value& key_value, value& type_value, instance& instance) { return value(); }
+			virtual result_t load_key(value& key_value, instance& instance) { return value(); }
+			virtual result_t set_key(value& key_value, value& type_value, instance& instance) { return value(); }
 
-			virtual ffi_res_t invoke(value* args, uint32_t arg_c, instance& instance) { return value(); }
+			virtual result_t invoke(value* args, uint32_t arg_c, instance& instance) { return value(); }
+
+			virtual std::string to_print_string() { return "foreign resource"; }
 
 			void unref() {
 				if (ref_count == 0) {
@@ -59,7 +61,8 @@ namespace HulaScript::Runtime {
 		instance(uint32_t max_locals, uint32_t max_globals, size_t max_table);
 		~instance();
 
-		std::variant<value, error> execute();
+		result_t execute();
+		result_t call(value function, std::vector<value>& args);
 
 		std::string value_to_print_str(value& val) const;
 
@@ -132,7 +135,7 @@ namespace HulaScript::Runtime {
 
 		std::vector<instruction> loaded_instructions;
 		std::map<uint32_t, source_loc> ip_src_locs;
-		uint32_t top_level_local_offset;
+		uint32_t top_level_local_offset, exec_depth;
 		
 		spp::sparsetable<loaded_function_entry, SPP_DEFAULT_ALLOCATOR<loaded_function_entry>> function_entries;
 		std::vector<uint32_t> available_function_ids;

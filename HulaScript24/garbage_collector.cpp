@@ -287,7 +287,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 	return_stack.shrink_to_fit();
 	extended_offsets.shrink_to_fit();
 
-	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR) {
+	if (mode >= gc_collection_mode::FINALIZE_COLLECT_ERROR && exec_depth == 0) {
 		//remove unreachable functions
 		for (auto it = function_entries.ne_cbegin(); it != function_entries.ne_cend(); it++) {
 			size_t pos = function_entries.get_pos(it);

@@ -6,8 +6,6 @@
 using namespace HulaScript::Runtime;
 
 std::variant<value, error> instance::execute() {
-	auto table_hashid_comparator = [](std::pair<uint64_t, uint32_t> a, std::pair<uint64_t, uint32_t> b) -> bool { return a.first < b.first; };
-
 	instruction* instructions = loaded_instructions.data();
 	local_offset = 0;
 
@@ -17,8 +15,10 @@ std::variant<value, error> instance::execute() {
 														current_error = type_error(EXPECTED_TYPE, OPERAND_NAME.type());\
 														goto stop_exec;\
 													}\
-
+	
+	uint32_t return_depth_threshold = return_stack.size();
 	std::optional<error> current_error = std::nullopt;
+	exec_depth++;
 	while (current_ip != loaded_instructions.size())
 	{
 		instruction& ins = instructions[current_ip];
@@ -526,14 +526,20 @@ std::variant<value, error> instance::execute() {
 		}
 		case opcode::RETURN:
 		return_function:
-			if (return_stack.empty())
+			if (return_stack.empty()) {
 				goto stop_exec;
+			}
 
 			current_ip = return_stack.back();
 			return_stack.pop_back();
 			extended_local_offset = extended_offsets.back();
 			extended_offsets.pop_back();
 			local_offset -= extended_local_offset;
+			
+			if (return_stack.size() + 1 == return_depth_threshold) {
+				goto stop_exec;
+			}
+			
 			goto next_ins;
 		case opcode::INVALID:
 			current_error = make_error(etype::INTERNAL_ERROR, "Encountered unexpected invalid instruction");
@@ -552,8 +558,9 @@ std::variant<value, error> instance::execute() {
 	
 	if (evaluation_stack.empty())
 		evaluation_stack.push_back(value());
-	
+
 stop_exec:
+	exec_depth--;
 	if (current_error.has_value()) {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_ERROR);
 		extended_local_offset = top_level_local_offset;
@@ -561,7 +568,9 @@ stop_exec:
 	}
 	else {
 		garbage_collect(gc_collection_mode::FINALIZE_COLLECT_RETURN);
-		assert(evaluation_stack.size() == 1);
+		if (exec_depth == 0) {
+			assert(evaluation_stack.size() == 1);
+		}
 		assert(top_level_local_offset == extended_local_offset);
 		value to_return = evaluation_stack.back();
 		evaluation_stack.pop_back();
@@ -569,6 +578,39 @@ stop_exec:
 	}
 #undef LOAD_OPERAND
 #undef NORMALIZE_ARRAY_INDEX
+}
+
+instance::result_t instance::call(value fn_val, std::vector<value>& args) {
+	if (fn_val.type() != vtype::CLOSURE) {
+		return type_error(vtype::CLOSURE, fn_val.type());
+	}
+
+	auto fn_closure = fn_val.closure();
+	
+	loaded_function_entry& fn_entry = function_entries.unsafe_get(fn_closure.first);
+	if (fn_entry.parameter_count != args.size()) { //argument count mismatch
+		std::stringstream ss;
+		ss << "Function";
+		auto func_loc = loc_from_ip(fn_entry.start_address);
+		if (func_loc.has_value()) {
+			ss << ", at " << func_loc.value().to_print_string() << ',';
+		}
+
+		ss << " expected " << fn_entry.parameter_count << " argument(s), but got " << args.size() << " instead.";
+		return make_error(etype::ARGUMENT_COUNT_MISMATCH, ss.str());
+	}
+
+	evaluation_stack.insert(evaluation_stack.end(), args.begin(), args.end());
+	evaluation_stack.push_back(value(fn_closure.second));
+
+	return_stack.push_back(current_ip);
+
+	local_offset += extended_local_offset;
+	extended_offsets.push_back(extended_local_offset);
+	extended_local_offset = 0;
+	current_ip = fn_entry.start_address;
+
+	return execute();
 }
 
 uint32_t instance::emit_function_start(std::vector<instruction>& instructions) {

@@ -12,10 +12,10 @@ public:
 		assert(i < max);
 		assert((max - i) % step == 0);
 
-		register_member("elem", [this](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::ffi_res_t {
+		register_member("elem", [this](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::result_t {
 			return value((double)this->i);
 		}, 0);
-		register_member("next", [this](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::ffi_res_t {
+		register_member("next", [this](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::result_t {
 			this->i += this->step;
 			if (this->i == this->max) {
 				return value();
@@ -32,27 +32,31 @@ private:
 int main() {
 	static bool stop = false;
 	HulaScript::repl_instance instance(std::nullopt, 256, 16, 256);
-	instance.declare_func("count_args", [](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::ffi_res_t {
+	instance.declare_func("count_args", [](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::result_t {
 		return value((double)argc);
 	}, std::nullopt);
-	instance.declare_func("add_func", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::ffi_res_t {
+	instance.declare_func("add_func", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
 		return value(args[0].number() + args[1].number());
 	}, 2);
-	instance.declare_func("range", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::ffi_res_t {
+	instance.declare_func("call_func", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
+		std::vector<value> call_args = { args[1] };
+		return instance.call(args[0], call_args);
+	}, 2);
+	instance.declare_func("range", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
 		if (args[0].number() >= args[1].number()) {
 			return value();
 		}
 		//use new because make_shared copies the value, which causes members that capture this to be invalid
 		return instance.make_foreign_resource(new range_obj(args[0].number(), args[1].number(), args[2].number()));
 	}, 3);
-	instance.declare_func("print", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance)->instance::ffi_res_t {
+	instance.declare_func("print", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance)->instance::result_t {
 		for (uint_fast32_t i = 0; i < arg_c; i++) {
 			std::cout << instance.value_to_print_str(args[i]);
 		}
 		std::cout << std::endl;
 		return value();
 	}, std::nullopt);
-	instance.declare_func("stop", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance)->instance::ffi_res_t {
+	instance.declare_func("stop", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance)->instance::result_t {
 		stop = true;
 		return value();
 	}, 0);
