@@ -245,7 +245,9 @@ void instance::garbage_collect(gc_collection_mode mode) {
 
 	//release unreachable foreign resources
 	for (auto it = foreign_resources.begin(); it != foreign_resources.end();) {
-		if (!marked_foreign_resources.contains(it->get())) {
+		foreign_resource* resource = *it;
+		if (!marked_foreign_resources.contains(resource)) {
+			resource->unref();
 			it = foreign_resources.erase(it);
 		}
 		else {
@@ -330,5 +332,7 @@ void instance::garbage_collect(gc_collection_mode mode) {
 
 		loaded_instructions.erase(loaded_instructions.begin() + current_ip, loaded_instructions.end());
 		loaded_instructions.shrink_to_fit();
+
+		this->current_ip = static_cast<uint32_t>(loaded_instructions.size());
 	}
 }
