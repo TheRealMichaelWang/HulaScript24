@@ -8,7 +8,7 @@ using namespace HulaScript::Runtime;
 
 instance::instance(uint32_t max_locals, uint32_t max_globals, size_t max_table) : 
 	max_locals(max_locals), max_globals(max_globals), max_table(max_table),
-	local_offset(0), extended_local_offset(0), global_offset(0), table_offset(0), current_ip(0), top_level_local_offset(0),
+	local_offset(0), extended_local_offset(0), global_offset(0), table_offset(0), current_ip(0), top_level_local_offset(0), exec_depth(0),
 	local_elems((value*)malloc(max_locals * sizeof(value))),
 	global_elems((value*)malloc(max_globals * sizeof(value))),
 	table_elems((value*)malloc(max_table * sizeof(value))),

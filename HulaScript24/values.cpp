@@ -61,7 +61,7 @@ std::string instance::value_to_print_str(value& val) const {
 			}
 			ss << value_to_print_str(table_elems[entry.block.table_start + i]);
 		}
-		ss << ']';
+		ss << "])";
 		return ss.str();
 	}
 	case HulaScript::Runtime::TABLE: {
@@ -84,6 +84,10 @@ std::string instance::value_to_print_str(value& val) const {
 		return std::to_string(val.number());
 	case HulaScript::Runtime::NIL:
 		return "nil";
+	case HulaScript::Runtime::FOREIGN_RESOURCE: {
+		foreign_resource* resource = static_cast<foreign_resource*>(val.raw_ptr());
+		return resource->to_print_string();
+	}
 	default:
 		return "error";
 	}
