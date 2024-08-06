@@ -32,16 +32,6 @@ private:
 int main() {
 	static bool stop = false;
 	HulaScript::repl_instance instance(std::nullopt, 256, 16, 256);
-	instance.declare_func("count_args", [](value* args, uint32_t argc, HulaScript::Runtime::instance& instance) -> instance::result_t {
-		return value((double)argc);
-	}, std::nullopt);
-	instance.declare_func("add_func", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
-		return value(args[0].number() + args[1].number());
-	}, 2);
-	instance.declare_func("call_func", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
-		std::vector<value> call_args = { args[1] };
-		return instance.call(args[0], call_args);
-	}, 2);
 	instance.declare_func("range", [](value* args, uint32_t arg_c, HulaScript::Runtime::instance& instance) -> instance::result_t {
 		if (args[0].number() >= args[1].number()) {
 			return value();
